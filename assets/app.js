@@ -1,59 +1,67 @@
 "use strict";
-/* iGEM Intelligence Machine — the whole front end.
-
-   Data comes from two places. baseline/ ships with the site and always works.
-   The database repo on GitHub can serve newer bundles; if it is slow, gone or
-   broken we just keep the baseline. */
+// iGEM Intelligence Machine - frontend (vanilla JS, no build step)
+//
+// Same UI as the local version. What changed is where the data comes from: the
+// search index is loaded into the page and queried in a worker, instead of a
+// Python server. baseline/ ships with the site and always works; the database
+// repo on GitHub can serve newer bundles on top of it.
 
 const DATA_ORIGINS = [
   "https://tarmaska11.github.io/igem-intelligence-machine-db/",
   "https://raw.githubusercontent.com/Tarmaska11/igem-intelligence-machine-db/main/",
 ];
+// The bundle shape this build of the site understands. A database repo serving
+// anything else is ignored, so a bad publish years from now cannot break the page.
+const DATA_SCHEMA = 2;
 const REMOTE_TIMEOUT = 6000;
 const PAGE_SIZE = 20;
-const CACHE_NAME = "igem-im-data-v1";
 
-const FACET_GROUPS = [
-  ["year", "Year"],
-  ["track", "Track"],
-  ["domain", "Application area"],
-  ["chassis", "Chassis organism"],
+const FACET_KINDS = [
+  ["molecule",  "Target molecule"],
+  ["chassis",   "Chassis organism"],
   ["technique", "Molecular technique"],
-  ["molecule", "Target molecule"],
-  ["part", "Biological part"],
-  ["region", "Region"],
-  ["country", "Country"],
-  ["section", "Team section"],
-  ["failures", "Documented failures"],
+  ["part",      "Biological part"],
+  ["domain",    "Application domain"],
+  ["track",     "Track"],
+  ["year",      "Year"],
+  ["region",    "Region"],
+  ["country",   "Country"],
+  ["section",   "Team section"],
+  ["failures",  "Documented failures"],
 ];
-const FACET_SHOW = 12;
+const IMP_ICON = { core: "●", supporting: "◐", mentioned: "○", "": "·" };
 
-const $ = (s) => document.querySelector(s);
-const el = (tag, cls, text) => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text !== undefined) n.textContent = text;
-  return n;
-};
+// Two search modes: Keyword (default, exact term matching) and Concept + Keyword
+// (blends keyword hits with conceptually related teams via LSA). The second needs
+// the LSA model; without it only Keyword is offered.
+const MODES = [
+  ["lexical", "Keyword", "Exact keyword matching (BM25), with a smart OR fallback for recall"],
+  ["hybrid",  "Concept + Keyword", "Keyword matches plus conceptually related teams"],
+];
+const DEFAULT_MODE = "lexical";
 
 const state = {
-  q: "", filters: {}, page: 1,
-  meta: null, site: null, posts: [],
-  source: "baseline", base: "baseline/",
-  records: null, labels: {}, seq: 0,
+  q: "",
+  mode: DEFAULT_MODE,
+  filters: {},          // kind -> Set(facet key)
+  page: 1,
+  facetData: {},
+  semantic: false,      // whether the LSA model loaded
+  lastRes: null,
+  labels: {},           // kind -> {key: display label}
+  base: "baseline/",    // where wiki text and the LSA model come from
+  fulltextBases: null,  // set only once a database repo has been accepted
+  meta: null,
+  posts: [],
 };
 
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+// ---------- data layer ----------
 let worker = null;
-
-/* ---------- loading ---------- */
-
-async function fetchGz(url, signal) {
-  const r = await fetch(url, { signal, cache: "no-cache" });
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  if (!url.endsWith(".gz")) return r.json();
-  const stream = r.body.pipeThrough(new DecompressionStream("gzip"));
-  return JSON.parse(await new Response(stream).text());
-}
+let _records = null;
+let _partsData = null;
 
 function withTimeout(ms) {
   const c = new AbortController();
@@ -61,29 +69,43 @@ function withTimeout(ms) {
   return c.signal;
 }
 
-/* Try each remote origin in turn. Returns a base URL or null. */
-async function findRemote() {
-  for (const origin of DATA_ORIGINS) {
-    try {
-      const man = await fetchGz(origin + "manifest.json", withTimeout(REMOTE_TIMEOUT));
-      if (man && man.files) return { base: origin, manifest: man };
-    } catch (e) { /* try the next one */ }
-  }
-  return null;
+async function fetchGz(url, signal) {
+  const r = await fetch(url, { signal, cache: "no-cache" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!url.endsWith(".gz")) return r.json();
+  return JSON.parse(await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text());
+}
+
+async function fetchTextGz(url) {
+  const r = await fetch(url, { signal: withTimeout(20000) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
 }
 
 const BUNDLES = ["cards", "index", "facets", "meta"];
 
 async function loadBundles(base, only) {
-  const want = only || BUNDLES;
   const got = {};
-  await Promise.all(want.map(async (name) => {
-    got[name] = await fetchGz(base + name + ".json.gz");
-  }));
+  await Promise.all((only || BUNDLES).map(async (n) => { got[n] = await fetchGz(base + n + ".json.gz"); }));
   return got;
 }
 
-/* Which bundles the database repo actually has a different version of. */
+async function findRemote() {
+  for (const origin of DATA_ORIGINS) {
+    try {
+      const man = await fetchGz(origin + "manifest.json", withTimeout(REMOTE_TIMEOUT));
+      if (!man || !man.files) continue;
+      if (man.schema !== DATA_SCHEMA) {
+        showNote("The database repo publishes a newer data format than this site " +
+                 "understands, so the built-in archive is being used.");
+        continue;
+      }
+      return { base: origin, manifest: man };
+    } catch (e) { /* try the next origin */ }
+  }
+  return null;
+}
+
 function changedBundles(local, remote) {
   if (!local || !local.files || !remote || !remote.files) return BUNDLES;
   return BUNDLES.filter((n) => {
@@ -92,406 +114,737 @@ function changedBundles(local, remote) {
   });
 }
 
-async function boot() {
-  bindUI();
-  renderBlog();
-
-  let data = null, localManifest = null;
-  try {
-    [data, localManifest] = await Promise.all([
-      loadBundles("baseline/"),
-      fetchGz("baseline/manifest.json").catch(() => null),
-    ]);
-    state.source = "baseline";
-  } catch (e) {
-    showNote("The bundled data could not be read. The page cannot search.");
-    return;
-  }
-  startWorker(data);
-  applyMeta(data.meta);
-  readURL();
-  run(false);
-
-  // Now see whether the database repo has something newer. Only the bundles whose
-  // checksum differs get downloaded, so the usual visit fetches nothing twice.
-  const remote = await findRemote();
-  if (!remote) { showNote("Showing the built-in 2008-2025 archive (database repo unreachable)."); return; }
-  state.base = remote.base;
-  const changed = changedBundles(localManifest, remote.manifest);
-  if (changed.length) {
+async function getRecords() {
+  if (_records) return _records;
+  for (const base of [state.base, "baseline/"]) {
     try {
-      const fresh = await loadBundles(remote.base, changed);
-      startWorker(Object.assign({}, data, fresh));
-      if (fresh.meta) applyMeta(fresh.meta);
-      state.source = "remote";
-      run(false);
-    } catch (e) { /* keep the baseline */ }
+      const arr = await fetchGz(base + "records.json.gz");
+      _records = new Map(arr.map((r) => [r.id, r]));
+      return _records;
+    } catch (e) { /* fall through to the bundled copy */ }
   }
-  loadRemoteContent(remote.base);
+  return null;
+}
+
+async function getParts() {
+  if (_partsData) return _partsData;
+  for (const base of [state.base, "baseline/"]) {
+    try { _partsData = await fetchGz(base + "parts.json.gz"); return _partsData; }
+    catch (e) { /* fall through */ }
+  }
+  return null;
+}
+
+// search goes through the worker; one message answers results + facets together
+const _pending = new Map();
+function askWorker(msg) {
+  return new Promise((resolve) => {
+    const seq = (askWorker._n = (askWorker._n || 0) + 1);
+    _pending.set(seq, resolve);
+    worker.postMessage(Object.assign({ seq }, msg));
+  });
 }
 
 function startWorker(data) {
   if (worker) worker.terminate();
   worker = new Worker("assets/search.worker.js");
-  worker.onmessage = onWorkerMessage;
+  worker.onmessage = (ev) => {
+    const m = ev.data;
+    const done = _pending.get(m.seq);
+    if (done) { _pending.delete(m.seq); done(m); }
+  };
   worker.postMessage({
     type: "load", cards: data.cards, index: data.index, facets: data.facets,
-    fulltextBase: state.base,
+    fulltextBases: state.fulltextBases,
   });
   state.meta = data.meta;
 }
 
-/* Blog, hero wording and the extra nav button all come from the database repo. */
-async function loadRemoteContent(base) {
-  try {
-    const site = await fetchGz(base + "site.json", withTimeout(REMOTE_TIMEOUT));
-    state.site = site;
-    applySite(site);
-  } catch (e) { /* the built-in wording stays */ }
-  try {
-    const data = await fetchGz(base + "posts.json", withTimeout(REMOTE_TIMEOUT));
-    state.posts = Array.isArray(data) ? data : (data.posts || []);
-    renderBlog();
-  } catch (e) { /* no posts */ }
-}
-
-function applyMeta(meta) {
-  if (!meta) return;
-  const n = (x) => (x || 0).toLocaleString("en-US").replace(/,/g, " ");
-  $("#heroYears").textContent = meta.year_range || "2008-2025";
-  const d = meta.distinct || {};
-  const segs = [
-    n(meta.record_count) + " projects",
-    (meta.years || []).length + " years (" + (meta.year_range || "") + ")",
-    n(d.molecule) + " molecules", n(d.chassis) + " chassis",
-    n(d.technique) + " techniques", n(d.part) + " parts",
-  ];
-  const hs = $("#heroStats");
-  hs.textContent = "";
-  segs.forEach((s, i) => {
-    if (i) hs.appendChild(el("span", "dot", "·"));
-    hs.appendChild(el("span", "seg", s));
-  });
-}
-
-function applySite(site) {
-  if (site.hero && site.hero.year_range) $("#heroYears").textContent = site.hero.year_range;
-  if (site.stats && Array.isArray(site.stats.segments) && site.stats.segments.length) {
-    const hs = $("#heroStats");
-    hs.textContent = "";
-    site.stats.segments.forEach((s, i) => {
-      if (i) hs.appendChild(el("span", "dot", "·"));
-      hs.appendChild(el("span", "seg", String(s)));
-    });
-  }
-  const nav = site.nav_button || {};
-  const btn = $("#customBtn");
-  if (nav.enabled && nav.page) {
-    btn.textContent = nav.label || "More";
-    btn.hidden = false;
-    btn.onclick = () => openCustom(nav.page);
-  } else {
-    btn.hidden = true;
-  }
-}
-
-function showNote(msg) {
-  const n = $("#dataNote");
-  n.textContent = msg;
-  n.hidden = false;
-  setTimeout(() => { n.hidden = true; }, 9000);
-}
-
-/* ---------- url state ---------- */
-
+// ---------- URL state (shareable / back-button) ----------
 function readURL() {
   const p = new URLSearchParams(location.search);
   state.q = p.get("q") || "";
-  state.page = Math.max(1, parseInt(p.get("page") || "1", 10) || 1);
+  state.page = parseInt(p.get("page") || "1", 10) || 1;
+  const m = p.get("mode");
+  state.mode = MODES.some(([id]) => id === m) ? m : DEFAULT_MODE;
+  if (!state.semantic) state.mode = "lexical";
   state.filters = {};
-  for (const [kind] of FACET_GROUPS) {
-    const vals = p.getAll(kind);
-    if (vals.length) state.filters[kind] = vals;
+  for (const [k] of FACET_KINDS) {
+    const vals = p.getAll(k);
+    if (vals.length) state.filters[k] = new Set(vals.map((v) => v.toLowerCase()));
   }
   $("#q").value = state.q;
 }
-
 function writeURL(push) {
   const p = new URLSearchParams();
   if (state.q) p.set("q", state.q);
-  if (state.page > 1) p.set("page", String(state.page));
-  for (const kind of Object.keys(state.filters)) {
-    for (const v of state.filters[kind]) p.append(kind, v);
+  if (state.mode !== DEFAULT_MODE) p.set("mode", state.mode);
+  if (state.page > 1) p.set("page", state.page);
+  for (const k in state.filters) for (const v of state.filters[k]) p.append(k, v);
+  const url = location.pathname + (p.toString() ? "?" + p.toString() : "");
+  if (push) history.pushState({}, "", url); else history.replaceState({}, "", url);
+}
+
+// ---------- rendering ----------
+function hasQuery() {
+  return state.q.trim() !== "" || Object.keys(state.filters).length > 0;
+}
+
+function setMode() {
+  const active = hasQuery();
+  $("#topbar").classList.toggle("searching", active);
+  $("#hero").hidden = active;
+  $("#facets").hidden = !active || (isNarrow() && !$("#facets").classList.contains("open"));
+  $("#filterBtn").hidden = !active || !isNarrow();
+  $("#resultsHead").hidden = !active;
+  $("#pager").hidden = !active;
+  // one search control, relocated: hero on home, header when showing results
+  const sw = $(".searchwrap");
+  if (sw) (active ? $("#headerSearch") : $("#heroSearch")).appendChild(sw);
+  $("#modeToggle").hidden = !(active && state.semantic);
+}
+
+function renderModeToggle() {
+  const box = $("#modeToggle");
+  if (!state.semantic || !hasQuery()) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = "";
+  for (const [id, label, tip] of MODES) {
+    const b = el("button", "modebtn" + (state.mode === id ? " on" : ""), label);
+    b.title = tip;
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", state.mode === id ? "true" : "false");
+    b.onclick = () => {
+      if (state.mode === id) return;
+      state.mode = id; state.page = 1; run(true);
+    };
+    box.appendChild(b);
   }
-  const url = location.pathname + (p.toString() ? "?" + p : "");
-  if (push) history.pushState(null, "", url);
-  else history.replaceState(null, "", url);
 }
 
-const hasQuery = () => state.q.trim() !== "" || Object.keys(state.filters).length > 0;
+const SORTNOTE = {
+  lexical:  "ranked by keyword relevance",
+  hybrid:   "ranked by relevance — keyword + concept",
+};
 
-/* ---------- running a search ---------- */
-
-function run(push) {
-  closeCustom();
-  const searching = hasQuery();
-  $("#hero").hidden = searching;
-  $("#resultsHead").hidden = !searching;
-  if (!searching) $("#activeBar").hidden = true;
-  $("#pager").hidden = !searching;
-  $("#facets").hidden = !searching || isNarrow();
-  $("#filterBtn").hidden = !searching || !isNarrow();
-
-  // in results mode the search box moves up into the header
-  const wrap = document.querySelector(".searchwrap");
-  const target = searching ? $("#headerSearch") : $("#heroSearch");
-  if (wrap && wrap.parentElement !== target) target.appendChild(wrap);
-
-  writeURL(push);
-  if (!worker) return;
-  state.seq++;
-  worker.postMessage({
-    type: "search", seq: state.seq, q: state.q, filters: state.filters,
-    page: state.page, pageSize: PAGE_SIZE,
-  });
+function tag(item) {
+  const t = el("span", "tag " + (item.importance || "mentioned"));
+  const ic = el("i", "ic", IMP_ICON[item.importance] || "·");
+  t.appendChild(ic); t.appendChild(document.createTextNode(item.name));
+  return t;
 }
 
-function onWorkerMessage(ev) {
-  const m = ev.data;
-  if (m.type === "ready") return;
-  if (m.type !== "results" || m.seq !== state.seq) return;
-  renderResults(m);
-  renderFacets(m.facets);
-  renderChips();
-  renderPager(m);
+function renderResults(data) {
+  const box = $("#results"); box.innerHTML = "";
+  $("#aiNote").hidden = true;
   $("#resultCount").textContent =
-    m.total.toLocaleString("en-US") + (m.total === 1 ? " project" : " projects");
-  $("#sortnote").textContent = state.q
-    ? "ranked by relevance · " + m.ms + " ms"
-    : "newest first";
-}
-
-function renderResults(m) {
-  const box = $("#results");
-  box.textContent = "";
-  if (!m.cards.length) {
-    box.appendChild(el("div", "empty", "Nothing matched. Try fewer words, or clear a filter."));
-    return;
+    data.total + (data.total === 1 ? " team" : " teams") +
+    (state.q ? ` for “${state.q}”` : "");
+  if (!data.results.length) {
+    box.appendChild(el("div", "empty", "No matching teams. Try fewer or broader terms."));
+    $("#pager").innerHTML = ""; return;
   }
-  for (const c of m.cards) {
-    const card = el("article", "card");
-    card.tabIndex = 0;
+  for (const r of data.results) {
+    const c = el("div", "card");
+    c.dataset.id = r.id;
+    c.onclick = () => openTeam(r.id);
     const top = el("div", "card-top");
-    const h = el("h3", null, c.t);
-    top.appendChild(h);
-    top.appendChild(el("span", "year", String(c.y)));
-    const dom = (c.f && c.f.domain && c.f.domain[0]) || (c.f && c.f.track && c.f.track[0]);
-    if (dom) top.appendChild(el("span", "domain", dom));
-    card.appendChild(top);
-    card.appendChild(el("p", "snip", (c.s || "").slice(0, 280)));
-    const tags = el("div", "tagrow");
-    for (const kind of ["chassis", "technique", "molecule"]) {
-      for (const v of ((c.f && c.f[kind]) || []).slice(0, 3)) {
-        tags.appendChild(el("span", "tag " + kind, v));
-      }
+    top.appendChild(el("span", "name", r.team_name));
+    top.appendChild(el("span", "year", r.year || ""));
+    if (r.domain) top.appendChild(el("span", "domain", r.domain));
+    if (r.needs_summary) {
+      const b = el("span", "needs-sum", "summary needed");
+      b.title = "Full wiki text is indexed and searchable; the AI summary hasn't been extracted yet.";
+      top.appendChild(b);
     }
-    card.appendChild(tags);
-    card.onclick = () => openTeam(c.id);
-    card.onkeydown = (e) => { if (e.key === "Enter") openTeam(c.id); };
-    box.appendChild(card);
+    c.appendChild(top);
+    if (r.wiki_only) {
+      const b = el("span", "needs-sum", "wiki text match");
+      b.title = "The summary does not mention your words, but this team's wiki does.";
+      top.appendChild(b);
+    }
+    if (r.snippet) c.appendChild(el("div", "snip", r.snippet));
+    const tr = el("div", "tagrow");
+    (r.chassis || []).forEach((x) => tr.appendChild(tag(x)));
+    (r.techniques || []).forEach((x) => tr.appendChild(tag(x)));
+    (r.molecules || []).slice(0, 3).forEach((m) => tr.appendChild(tag({ name: m, importance: "core" })));
+    c.appendChild(tr);
+    box.appendChild(c);
+  }
+  renderPager(data);
+}
+
+function renderPager(data) {
+  const pg = $("#pager"); pg.innerHTML = "";
+  const pages = Math.max(1, Math.ceil(data.total / data.page_size));
+  const prev = el("button", null, "‹ Prev"); prev.disabled = data.page <= 1;
+  prev.onclick = () => { state.page--; run(true); window.scrollTo(0, 0); };
+  const next = el("button", null, "Next ›"); next.disabled = data.page >= pages;
+  next.onclick = () => { state.page++; run(true); window.scrollTo(0, 0); };
+  const info = el("span", "info", `page ${data.page} / ${pages}`);
+  pg.append(prev, info, next);
+}
+
+function renderActiveChips() {
+  const box = $("#activeChips"); box.innerHTML = "";
+  for (const k in state.filters) for (const v of state.filters[k]) {
+    const chip = el("span", "chip");
+    chip.appendChild(el("span", "k", k));
+    chip.appendChild(document.createTextNode((state.labels[k] && state.labels[k][v]) || v));
+    chip.appendChild(el("span", "x", "✕"));
+    chip.onclick = () => { toggleFacet(k, v); };
+    box.appendChild(chip);
   }
 }
 
-function renderFacets(facets) {
-  const box = $("#facetGroups");
-  box.textContent = "";
-  for (const [kind, label] of FACET_GROUPS) {
-    const rows = facets[kind];
-    if (!rows || !rows.length) continue;
-    const group = el("div", "facet-group");
-    const head = el("div", "facet-head");
-    head.appendChild(el("span", null, label));
-    head.appendChild(el("span", "facet-n", String(rows.length)));
-    const list = el("div", "facet-list");
-    const selected = new Set(state.filters[kind] || []);
+const FACET_SHOW = 14;
+
+function renderFacets(data) {
+  const wrap = $("#facetGroups"); wrap.innerHTML = "";
+  const kinds = data.kinds || {};
+  for (const [kind, label] of FACET_KINDS) {
+    const items = kinds[kind];
+    if (!items || !items.length) continue;
     state.labels[kind] = state.labels[kind] || {};
+    const g = el("div", "facet-group");
+    const h = el("h3"); h.appendChild(el("span", null, label));
+    const list = el("div", "facet-list");
+    h.onclick = () => list.toggleAttribute("hidden");
+    g.appendChild(h);
     let shown = FACET_SHOW;
     const paint = () => {
-      list.textContent = "";
-      for (const r of rows.slice(0, shown)) {
-        const key = r.k || r.v;
-        state.labels[kind][key] = r.v;
-        const row = el("div", "facet-item" + (selected.has(key) ? " on" : ""));
-        row.appendChild(el("span", "facet-v", r.v));
-        row.appendChild(el("span", "facet-c", String(r.n)));
+      list.innerHTML = "";
+      for (const it of items.slice(0, shown)) {
+        const key = it.key || it.value.toLowerCase();
+        state.labels[kind][key] = it.value;
+        const on = state.filters[kind] && state.filters[kind].has(key);
+        const row = el("div", "facet-item" + (on ? " on" : ""));
+        const nm = el("span", "facet-name", it.value); nm.title = it.value;
+        row.appendChild(nm);
+        row.appendChild(el("span", "cnt", it.count));
         row.onclick = () => toggleFacet(kind, key);
         list.appendChild(row);
       }
-      if (rows.length > shown) {
-        const more = el("button", "facet-more", "show " + Math.min(30, rows.length - shown) + " more");
-        more.onclick = (e) => { e.stopPropagation(); shown += 30; paint(); };
+      if (items.length > shown) {
+        const more = el("button", "link facet-more",
+          "show " + Math.min(40, items.length - shown) + " more");
+        more.onclick = (e) => { e.stopPropagation(); shown += 40; paint(); };
         list.appendChild(more);
       }
     };
     paint();
-    head.onclick = () => list.toggleAttribute("hidden");
-    group.appendChild(head);
-    group.appendChild(list);
-    box.appendChild(group);
+    g.appendChild(list);
+    wrap.appendChild(g);
   }
 }
 
-function renderChips() {
-  const box = $("#activeChips");
-  box.textContent = "";
-  let any = false;
-  for (const kind of Object.keys(state.filters)) {
-    for (const key of state.filters[kind]) {
-      const label = (state.labels[kind] && state.labels[kind][key]) || key;
-      const chip = el("button", "chip", label + "  ×");
-      chip.onclick = () => toggleFacet(kind, key);
-      box.appendChild(chip);
-      any = true;
-    }
-  }
-  $("#activeBar").hidden = !any;
-}
-
-function toggleFacet(kind, value) {
-  const cur = new Set(state.filters[kind] || []);
-  if (cur.has(value)) cur.delete(value); else cur.add(value);
-  if (cur.size) state.filters[kind] = Array.from(cur);
-  else delete state.filters[kind];
+function toggleFacet(kind, key) {
+  const set = state.filters[kind] || new Set();
+  if (set.has(key)) set.delete(key); else set.add(key);
+  if (set.size) state.filters[kind] = set; else delete state.filters[kind];
   state.page = 1;
   run(true);
 }
 
-function renderPager(m) {
-  const box = $("#pager");
-  box.textContent = "";
-  const pages = Math.ceil(m.total / PAGE_SIZE);
-  if (pages <= 1) return;
-  const mk = (label, page, disabled) => {
-    const b = el("button", "page-btn", label);
-    b.disabled = !!disabled;
-    b.onclick = () => { state.page = page; run(true); window.scrollTo(0, 0); };
-    return b;
-  };
-  box.appendChild(mk("← previous", state.page - 1, state.page <= 1));
-  box.appendChild(el("span", "page-now", "page " + state.page + " of " + pages));
-  box.appendChild(mk("next →", state.page + 1, state.page >= pages));
-}
-
-/* ---------- team detail ---------- */
-
-async function ensureRecords() {
-  if (state.records) return state.records;
-  for (const base of [state.base, "baseline/"]) {
-    try {
-      const arr = await fetchGz(base + "records.json.gz");
-      state.records = new Map(arr.map((r) => [r.id, r]));
-      return state.records;
-    } catch (e) { /* try baseline */ }
-  }
-  return null;
-}
+// ---------- team drawer (tabs: Details / Wiki + Ask AI) ----------
+let _curTeam = null;
 
 async function openTeam(id) {
-  const panel = $("#drawerPanel");
-  panel.textContent = "";
-  panel.appendChild(el("div", "drawer-loading", "Loading…"));
-  $("#drawer").hidden = false;
-  document.body.style.overflow = "hidden";
+  const recs = await getRecords();
+  const t = recs && recs.get(id);
+  if (!t) return;
+  _curTeam = t;
+  const p = $("#drawerPanel"); p.innerHTML = "";
 
-  const recs = await ensureRecords();
-  const r = recs && recs.get(id);
-  panel.textContent = "";
-  const close = el("button", "drawer-close", "×");
-  close.onclick = closeDrawer;
-  panel.appendChild(close);
-  if (!r) {
-    panel.appendChild(el("p", "empty", "Could not load this record."));
-    return;
-  }
-  const head = el("div", "drawer-head");
-  head.appendChild(el("h2", null, r.t));
-  head.appendChild(el("span", "year", String(r.y)));
-  panel.appendChild(head);
+  const dh = el("div", "dh");
+  dh.appendChild(el("h2", null, t.t));
+  dh.appendChild(el("span", "year", t.y || ""));
+  const close = el("button", "close", "✕"); close.onclick = closeDrawer;
+  dh.appendChild(close); p.appendChild(dh);
 
-  const meta = el("div", "drawer-meta");
-  const bits = [];
-  if (r.f && r.f.track) bits.push(r.f.track[0]);
-  if (r.f && r.f.country) bits.push(r.f.country[0]);
-  if (r.city) bits.push(r.city);
-  if (r.f && r.f.section) bits.push(r.f.section[0]);
-  meta.textContent = bits.join(" · ");
-  panel.appendChild(meta);
-
-  if (r.u) {
-    const a = el("a", "wiki-link", "Open the team wiki ↗");
-    a.href = r.u; a.target = "_blank"; a.rel = "noopener noreferrer";
-    panel.appendChild(a);
-  }
-
-  const section = (title, body) => {
-    if (!body || (Array.isArray(body) && !body.length)) return;
-    panel.appendChild(el("h3", "drawer-h", title));
-    if (Array.isArray(body)) {
-      const ul = el("ul", "drawer-list");
-      for (const x of body) ul.appendChild(el("li", null, x));
-      panel.appendChild(ul);
-    } else {
-      panel.appendChild(el("p", "drawer-p", body));
-    }
+  const tabs = el("div", "dtabs");
+  const panes = el("div", "dpanes");
+  const paneDetails = el("div", "dpane on");
+  const paneWork = el("div", "dpane workspace-pane");
+  const mkTab = (label, pane, onfirst) => {
+    const b = el("button", "dtab" + (pane === paneDetails ? " on" : ""), label);
+    b.onclick = () => {
+      tabs.querySelectorAll(".dtab").forEach((x) => x.classList.remove("on"));
+      panes.querySelectorAll(".dpane").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on"); pane.classList.add("on");
+      if (onfirst && !pane.dataset.init) { pane.dataset.init = "1"; onfirst(pane); }
+    };
+    tabs.appendChild(b);
   };
-  section("Summary", r.s);
-  section("Problem", r.p);
-  section("Approach", r.a);
-  section("Novelty", r.n);
-  section("Key results", r.kr);
-  section("What did not work", r.fm);
+  mkTab("Details", paneDetails);
+  mkTab("Wiki + Ask AI", paneWork, initWorkspace);
+  p.appendChild(tabs);
+  panes.append(paneDetails, paneWork);
+  p.appendChild(panes);
 
-  for (const [kind, label] of [["chassis", "Chassis organisms"], ["technique", "Molecular techniques"],
-                               ["part", "Biological parts"], ["molecule", "Target molecules"]]) {
-    const vals = (r.raw && r.raw[kind]) || [];
-    if (!vals.length) continue;
-    panel.appendChild(el("h3", "drawer-h", label));
-    const wrap = el("div", "tagrow");
-    for (const v of vals) wrap.appendChild(el("span", "tag " + kind, v));
-    panel.appendChild(wrap);
+  buildDetails(paneDetails, t);
+  $("#drawer").hidden = false;
+  applyDrawerWidth();
+}
+
+function buildDetails(p, t) {
+  const meta = el("div", "dmeta");
+  if (t.application_domain) meta.appendChild(el("span", null, t.application_domain));
+  if (t.track) meta.appendChild(el("span", null, "track: " + t.track));
+  if (t.f && t.f.country) {
+    meta.appendChild(el("span", null, t.f.country[0] + (t.city ? " · " + t.city : "")));
   }
-  section("References", r.rf);
+  if (t.f && t.f.section) meta.appendChild(el("span", null, t.f.section[0]));
+  if (t.ml) meta.appendChild(el("span", null, "src: " + t.ml));
+  if (t.u) { const a = el("a", null, "open wiki ↗"); a.href = t.u; a.target = "_blank"; a.rel = "noopener"; meta.appendChild(a); }
+  p.appendChild(meta);
+
+  const sect = (title, node) => { const s = el("div", "sect"); s.appendChild(el("h4", null, title)); s.appendChild(node); p.appendChild(s); };
+  const para = (txt) => el("p", null, txt);
+
+  if (t.p) sect("Problem", para(t.p));
+  if (t.a) sect("Approach", para(t.a));
+  if (t.s) sect("Summary", para(t.s));
+
+  const objList = (arr) => {
+    const w = el("div", "itemlist");
+    arr.forEach((it) => {
+      const row = el("div", "item");
+      row.appendChild(el("span", "dot " + (it.importance || "mentioned")));
+      const body = el("span");
+      body.appendChild(el("b", null, it.name + " "));
+      if (it.role) body.appendChild(el("span", "role", "— " + it.role));
+      row.appendChild(body); w.appendChild(row);
+    });
+    return w;
+  };
+  // biological parts: each name links to its iGEM Registry page when it has a BBa code
+  const partsList = (arr) => {
+    const w = el("div", "itemlist");
+    arr.forEach((it) => {
+      const row = el("div", "item");
+      row.appendChild(el("span", "dot " + (it.importance || "mentioned")));
+      const body = el("span");
+      if (it.registry_url) {
+        const a = el("a", "partlink"); a.href = it.registry_url; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = it.name;
+        a.title = "Open " + it.registry_id + " on registry.igem.org";
+        body.appendChild(a);
+        if (it.registry_id) body.appendChild(el("span", "bba", " " + it.registry_id));
+      } else {
+        body.appendChild(el("b", null, it.name));
+      }
+      if (it.role) body.appendChild(el("span", "role", " — " + it.role));
+      row.appendChild(body); w.appendChild(row);
+    });
+    return w;
+  };
+  const bullets = (arr, cls) => { const ul = el("ul"); arr.forEach((x) => { const li = el("li", cls); li.textContent = x; ul.appendChild(li); }); return ul; };
+
+  if (t.target_molecules && t.target_molecules.length) {
+    const w = el("div"); t.target_molecules.forEach((m) => w.appendChild(el("span", "mol", m))); sect("Target molecules", w);
+  }
+  if (t.chassis_organisms && t.chassis_organisms.length) sect("Chassis organisms", objList(t.chassis_organisms));
+  if (t.molecular_techniques && t.molecular_techniques.length) sect("Molecular techniques", objList(t.molecular_techniques));
+  if (t.biological_parts && t.biological_parts.length) sect("Biological parts", partsList(t.biological_parts));
+  if (t.kr && t.kr.length) sect("Key results", bullets(t.kr));
+  if (t.fm && t.fm.length) sect("Failure modes", bullets(t.fm, "fail"));
+  if (t.n) sect("Novelty claim", para(t.n));
+  if (t.rf && t.rf.length) sect("Key references", bullets(t.rf));
 }
 
-function closeDrawer() {
-  $("#drawer").hidden = true;
-  document.body.style.overflow = "";
+// ---- Workspace: wiki (left) + Ask-AI chat (right), side by side ----
+function initWorkspace(pane) {
+  const t = _curTeam;
+  const split = el("div", "workspace");
+  const wikiCol = el("div", "wiki-col");
+  const aiCol = el("div", "ai-col");
+  split.append(wikiCol, aiCol);
+  pane.appendChild(split);
+  buildWikiView(wikiCol, t);
+  initAiPane(aiCol);
 }
 
-/* ---------- the configurable page from the database repo ---------- */
+// ---- Wiki view: the live page in a frame, with a Live/Saved toggle. Some iGEM
+//      wikis refuse to be framed, so Saved text is always one click away. ----
+function buildWikiView(container, t) {
+  if (!t.u) { container.appendChild(el("div", "empty", "No wiki URL on record for this team.")); return; }
+  const bar = el("div", "wiki-bar");
+  const modes = el("div", "wiki-modes");
+  const liveBtn = el("button", "wiki-mode on", "Live wiki");
+  const textBtn = el("button", "wiki-mode", "Saved text");
+  modes.append(liveBtn, textBtn);
+  const open = el("a", "wiki-open", "Open in new tab ↗"); open.href = t.u; open.target = "_blank"; open.rel = "noopener";
+  bar.append(el("span", "wiki-url", t.u), modes, open);
+  container.appendChild(bar);
 
-async function openCustom(page) {
-  const view = $("#customView");
-  const frame = $("#customFrame");
+  const stage = el("div", "wiki-stage");
+  container.appendChild(stage);
+
+  function showLive() {
+    liveBtn.classList.add("on"); textBtn.classList.remove("on");
+    stage.innerHTML = "";
+    const frame = el("iframe", "wiki-frame");
+    frame.src = t.u;
+    frame.setAttribute("referrerpolicy", "no-referrer");
+    stage.appendChild(frame);
+    stage.appendChild(el("div", "wiki-note",
+      "If the wiki stays blank it refuses to be embedded — use Saved text, or open it in a new tab."));
+  }
+  async function showText(auto) {
+    textBtn.classList.add("on"); liveBtn.classList.remove("on");
+    stage.innerHTML = "";
+    stage.appendChild(el("div", "wiki-note", auto
+      ? "This wiki blocks live embedding, so here is the saved offline text."
+      : "Saved offline wiki text from the corpus."));
+    const body = el("div", "wiki-text"); body.textContent = "Loading saved text…";
+    stage.appendChild(body);
+    body.textContent = (await wikiText(t)) || "No saved wiki text is stored for this project.";
+  }
+  liveBtn.onclick = showLive;
+  textBtn.onclick = () => showText(false);
+  showLive();
+}
+
+const _textCache = new Map();
+async function wikiText(t) {
+  if (_textCache.has(t.id)) return _textCache.get(t.id);
+  let out = "";
+  try { out = await fetchTextGz(state.base + "fulltext/text/" + t.id + ".txt.gz"); }
+  catch (e) { out = ""; }
+  _textCache.set(t.id, out);
+  return out;
+}
+
+// ---- Ask-AI pane: chat grounded in this project's wiki text ----
+// On the website there is no local CLI, so the browser talks to Gemini directly
+// with a key the visitor pastes. The key stays in their browser and nowhere else.
+const GEM_KEY = "igem_gemini_api_key";
+const GEM_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
+const PRE2022_NOTE =
+  "Some sites may display incorrectly here. If you see a broken or skewed layout, " +
+  "click “Open in new tab ↗” above the wiki to view the original site.";
+
+function aiField(label, node) {
+  const w = el("label", "ai-field");
+  w.appendChild(el("span", "ai-flabel", label));
+  w.appendChild(node);
+  return w;
+}
+
+function readKey() { try { return (localStorage.getItem(GEM_KEY) || "").trim(); } catch (e) { return ""; } }
+
+function initAiPane(pane) {
+  const t = _curTeam;
+  const log = el("div", "ai-log");
+
+  const ctl = el("div", "ai-ctl");
+  const provSel = el("select", "ai-prov");
+  const o = el("option", null, "gemini"); o.value = "gemini"; provSel.appendChild(o);
+  const modelSel = el("select", "ai-model");
+  GEM_MODELS.forEach((m) => { const x = el("option", null, m); x.value = m; modelSel.appendChild(x); });
+  ctl.append(aiField("Agent", provSel), aiField("Model", modelSel));
+  pane.appendChild(ctl);
+  pane.appendChild(el("div", "ai-usage", "Uses your own Google AI Studio key, free tier."));
+
+  const keyRow = el("div", "ai-keyrow");
+  const keyInput = el("input", "ai-key");
+  keyInput.type = "password";
+  keyInput.autocomplete = "off";
+  keyInput.spellcheck = false;
+  keyInput.placeholder = "Paste your Google AI Studio API key";
+  keyInput.value = readKey();
+  keyInput.addEventListener("input", () => {
+    try { localStorage.setItem(GEM_KEY, keyInput.value.trim()); } catch (e) {}
+  });
+  const infoBtn = el("button", "ai-info", "ⓘ");
+  infoBtn.type = "button";
+  infoBtn.title = "How to get a free API key";
+  const help = el("div", "ai-help");
+  help.hidden = true;
+  help.innerHTML =
+    "<b>Get a free Gemini API key (stays in your browser only):</b><br>" +
+    "1. Open <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a> and sign in.<br>" +
+    "2. Click <b>Create API key</b> (no billing/card needed).<br>" +
+    "3. Paste it in the box above. It is saved only in this browser (localStorage) — " +
+    "never uploaded to this site or shared. Clear it anytime by emptying the box.<br>" +
+    "<i>Free tier uses the Flash models and has per-minute/day limits.</i>";
+  infoBtn.onclick = () => { help.hidden = !help.hidden; };
+  keyRow.append(keyInput, infoBtn);
+  pane.appendChild(keyRow);
+  pane.appendChild(help);
+
+  log.appendChild(el("div", "ai-hint",
+    "Answers come only from this project's stored wiki text. The request goes straight " +
+    "from your browser to Google with your own key."));
+  if (t.y && t.y < 2022) addMsg(log, "ai", PRE2022_NOTE);
+  pane.appendChild(log);
+
+  const form = el("div", "ai-form");
+  const ta = el("textarea", "ai-q");
+  ta.placeholder = "Ask about this project…  e.g.  What chassis did they use?  What were the key results?  What failed?";
+  ta.rows = 2;
+  const send = el("button", "ai-send", "Ask");
+  form.append(ta, send);
+  pane.appendChild(form);
+
+  let busy = false;
+  const history = [];
+  async function ask() {
+    const q = ta.value.trim();
+    if (!q || busy) return;
+    const apiKey = readKey();
+    if (!apiKey) {
+      addMsg(log, "you", q); ta.value = "";
+      addMsg(log, "ai", "To answer, I need a Google AI Studio API key. Paste yours in " +
+        "the box above (click ⓘ for a quick setup guide). It is stored only in your " +
+        "browser — never uploaded or shared.");
+      return;
+    }
+    busy = true; send.disabled = true;
+    addMsg(log, "you", q); ta.value = "";
+    const ans = addMsg(log, "ai", "");
+    ans.classList.add("streaming");
+    let answer = "";
+    try {
+      answer = await streamChat(t, q, modelSel.value, apiKey, history.slice(), ans, log);
+    } catch (e) {
+      ans.classList.add("err"); ans.textContent = "⚠ " + e;
+    }
+    ans.classList.remove("streaming");
+    if (answer && !ans.classList.contains("err")) {
+      history.push({ role: "user", text: q }, { role: "model", text: answer });
+      if (history.length > 24) history.splice(0, history.length - 24);
+    }
+    busy = false; send.disabled = false; ta.focus();
+  }
+  send.onclick = ask;
+  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } });
+}
+
+function addMsg(log, who, txt) {
+  const m = el("div", "ai-msg " + who);
+  m.textContent = txt;
+  log.appendChild(m);
+  log.scrollTop = log.scrollHeight;
+  return m;
+}
+
+// The structured record is always there; the full wiki text is added when we have it.
+function groundingFor(t, text) {
+  const head = [
+    "Team: " + t.t + " (" + t.y + ")",
+    t.track ? "Track: " + t.track : "",
+    t.s ? "Summary: " + t.s : "",
+    t.p ? "Problem: " + t.p : "",
+    t.a ? "Approach: " + t.a : "",
+    (t.kr || []).length ? "Key results:\n- " + t.kr.join("\n- ") : "",
+    (t.fm || []).length ? "Failure modes:\n- " + t.fm.join("\n- ") : "",
+  ].filter(Boolean).join("\n\n");
+  const wiki = (text || "").slice(0, 120000);
+  return head + (wiki ? "\n\n--- FULL WIKI TEXT ---\n" + wiki : "");
+}
+
+async function streamChat(t, question, model, apiKey, history, ansEl, log) {
+  const sys =
+    "You answer questions about one iGEM team project, using only the material below. " +
+    "If the material does not contain the answer, say so plainly. Be concise.\n\n" +
+    groundingFor(t, await wikiText(t));
+  const contents = [];
+  for (const h of history) contents.push({ role: h.role, parts: [{ text: h.text }] });
+  contents.push({ role: "user", parts: [{ text: question }] });
+
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+    encodeURIComponent(model) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(apiKey);
+  let resp;
   try {
-    const r = await fetch(state.base + page, { signal: withTimeout(REMOTE_TIMEOUT) });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    frame.srcdoc = await r.text();
-  } catch (e) {
-    frame.srcdoc = "<p style='font:14px system-ui;padding:24px'>This page is not available right now.</p>";
+    resp = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: sys }] } }),
+    });
+  } catch (e) { ansEl.classList.add("err"); ansEl.textContent = "⚠ request failed"; return ""; }
+  if (!resp.ok) {
+    ansEl.classList.add("err");
+    ansEl.textContent = (resp.status === 400 || resp.status === 403)
+      ? "⚠ that API key was rejected. Check it in the box above."
+      : "⚠ request failed (" + resp.status + ")";
+    return "";
+  }
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", acc = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const raw = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      const line = raw.replace(/^data: ?/, "");
+      if (!line) continue;
+      let obj; try { obj = JSON.parse(line); } catch (e) { continue; }
+      const bits = (((obj.candidates || [])[0] || {}).content || {}).parts || [];
+      for (const b of bits) if (b.text) { acc += b.text; ansEl.textContent = acc; log.scrollTop = log.scrollHeight; }
+    }
+  }
+  if (!acc && !ansEl.textContent) ansEl.textContent = "(no answer)";
+  return acc;
+}
+
+function closeDrawer() { $("#drawer").hidden = true; }
+
+// ---------- resizable drawer (drag the left-edge handle; width persisted) ----------
+const DW_KEY = "igem_drawer_width";
+function clampDrawerW(w) {
+  const min = Math.min(420, window.innerWidth);
+  return Math.max(min, Math.min(w, window.innerWidth - 24));
+}
+function applyDrawerWidth(w) {
+  const panel = $("#drawerPanel"), rz = $("#drawerResizer");
+  if (!panel) return 0;
+  if (w == null) {
+    const saved = parseInt(localStorage.getItem(DW_KEY) || "", 10);
+    w = saved > 0 ? saved : panel.getBoundingClientRect().width;
+  }
+  w = clampDrawerW(w);
+  panel.style.width = w + "px";
+  if (rz) rz.style.right = w + "px";
+  return w;
+}
+function initDrawerResize() {
+  const rz = $("#drawerResizer"); if (!rz) return;
+  let dragging = false, cur = 0;
+  const start = (e) => { dragging = true; document.body.classList.add("resizing-drawer"); e.preventDefault(); };
+  const move = (e) => {
+    if (!dragging) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    cur = applyDrawerWidth(window.innerWidth - x);
+  };
+  const end = () => {
+    if (!dragging) return;
+    dragging = false; document.body.classList.remove("resizing-drawer");
+    if (cur) localStorage.setItem(DW_KEY, String(Math.round(cur)));
+  };
+  rz.addEventListener("mousedown", start);
+  rz.addEventListener("touchstart", start, { passive: false });
+  document.addEventListener("mousemove", move);
+  document.addEventListener("touchmove", move, { passive: false });
+  document.addEventListener("mouseup", end);
+  document.addEventListener("touchend", end);
+  window.addEventListener("resize", () => { if (!$("#drawer").hidden) applyDrawerWidth(); });
+}
+
+// ---------- parts registry view ----------
+async function openParts() {
+  closeCustom();
+  $("#content").hidden = true;
+  $("#facets").hidden = true;
+  $("#partsView").hidden = false;
+  $("#topbar").classList.remove("searching");
+  $("#partsBtn").classList.add("on");
+  if (!_partsData) {
+    $("#partsList").innerHTML = "";
+    $("#partsSummary").textContent = "Loading parts…";
+    await getParts();
+  }
+  $("#partsFilter").value = "";
+  renderParts("");
+  $("#partsFilter").focus();
+}
+function closeParts() {
+  $("#partsView").hidden = true;
+  $("#content").hidden = false;
+  $("#partsBtn").classList.remove("on");
+}
+function renderParts(filter) {
+  const d = _partsData; if (!d) return;
+  const f = (filter || "").trim().toLowerCase();
+  let parts = d.parts;
+  if (f) parts = parts.filter((p) => p.name.toLowerCase().includes(f) ||
+                                      (p.registry_id || "").toLowerCase().includes(f));
+  $("#partsSummary").textContent =
+    `${d.total_unique.toLocaleString()} unique parts across all teams · ` +
+    `${d.coded.toLocaleString()} linked to a BBa Registry page` +
+    (f ? ` · ${parts.length.toLocaleString()} match “${filter}”` : "");
+  const box = $("#partsList"); box.innerHTML = "";
+  const SHOW = 600;
+  parts.slice(0, SHOW).forEach((p) => {
+    const row = el("div", "part-row");
+    if (p.url) {
+      const a = el("a", "part-name" + (p.coded ? " coded" : ""));
+      a.href = p.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = p.name;
+      a.title = "Open " + p.registry_id + " on registry.igem.org";
+      row.appendChild(a);
+    } else {
+      // descriptive name with no real Registry entry -> plain text, no dead link
+      row.appendChild(el("span", "part-name", p.name));
+    }
+    if (p.registry_id) row.appendChild(el("span", "part-id", p.registry_id));
+    row.appendChild(el("span", "part-count", p.count + (p.count === 1 ? " team" : " teams")));
+    box.appendChild(row);
+  });
+  if (!parts.length) box.appendChild(el("div", "empty", "No parts match that filter."));
+  else if (parts.length > SHOW)
+    box.appendChild(el("div", "empty",
+      `Showing the top ${SHOW} of ${parts.length.toLocaleString()} — refine the filter to see more.`));
+}
+
+// ---------- the page configured from the database repo ----------
+let _customLoaded = null;
+async function openCustom(page) {
+  closeParts();
+  const frame = $("#customFrame");
+  if (_customLoaded !== page) {
+    try {
+      const r = await fetch(state.base + page, { signal: withTimeout(REMOTE_TIMEOUT) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      frame.srcdoc = await r.text();
+      _customLoaded = page;
+    } catch (e) {
+      frame.srcdoc = "<p style='font:14px system-ui;padding:24px;color:#565a61'>" +
+        "This page is not available right now.</p>";
+    }
   }
   $("#content").hidden = true;
   $("#facets").hidden = true;
-  view.hidden = false;
+  $("#customView").hidden = false;
+  $("#customBtn").classList.add("on");
 }
-
 function closeCustom() {
   $("#customView").hidden = true;
   $("#content").hidden = false;
+  $("#customBtn").classList.remove("on");
 }
 
-/* ---------- blog ---------- */
+// ---------- main run ----------
+let _runSeq = 0;
+async function run(push) {
+  const seq = ++_runSeq;
+  closeParts();
+  closeCustom();
+  setMode();
+  renderModeToggle();
+  writeURL(push);
+  if (!hasQuery()) { $("#results").innerHTML = ""; $("#pager").innerHTML = ""; return; }
+  const filters = {};
+  for (const k in state.filters) filters[k] = Array.from(state.filters[k]);
+  const m = await askWorker({
+    type: "search", q: state.q, filters, page: state.page,
+    pageSize: PAGE_SIZE, mode: state.mode,
+  });
+  if (seq !== _runSeq) return;   // a newer run started while we waited
+  if (m.mode && m.mode !== state.mode) { state.mode = m.mode; renderModeToggle(); }
+  $("#sortnote").textContent = (SORTNOTE[m.mode] || SORTNOTE.lexical) +
+    (m.ms != null ? " · " + m.ms + " ms" : "");
+  const res = { total: m.total, page: m.page, page_size: PAGE_SIZE, results: m.results };
+  renderResults(res);
+  state.lastRes = res;
+  state.facetData = { kinds: m.facets };
+  renderActiveChips();
+  renderFacets(state.facetData);
+}
 
+// ---------- blog (home) ----------
 const BLOG_INITIAL = 3, BLOG_STEP = 10;
 let blogShown = BLOG_INITIAL;
 
@@ -509,10 +862,9 @@ function placeholderImage(seed) {
   return "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
-/* Post bodies now arrive over the network, so only a few tags are allowed through. */
+// Post bodies arrive over the network now, so only a few tags are let through.
 const ALLOWED = new Set(["P", "H3", "H4", "UL", "OL", "LI", "STRONG", "EM", "B", "I",
                          "BLOCKQUOTE", "A", "CODE", "PRE", "BR", "HR", "IMG", "FIGURE", "FIGCAPTION"]);
-
 function sanitize(html) {
   const doc = new DOMParser().parseFromString("<div>" + (html || "") + "</div>", "text/html");
   const walk = (node) => {
@@ -532,7 +884,7 @@ function sanitize(html) {
   return doc.body.firstChild.innerHTML;
 }
 
-function fmtDate(s) {
+function fmtPostDate(s) {
   const d = new Date(s);
   return isNaN(d) ? (s || "") : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
@@ -545,7 +897,7 @@ function renderBlog() {
   const order = posts.map((p, i) => ({ p, i }))
     .sort((a, b) => (b.p.pinned ? 1 : 0) - (a.p.pinned ? 1 : 0));
   const list = $("#blogList");
-  list.textContent = "";
+  list.innerHTML = "";
   for (const { p, i } of order.slice(0, blogShown)) {
     const card = el("article", "post-card");
     card.tabIndex = 0;
@@ -557,7 +909,7 @@ function renderBlog() {
     const body = el("div", "post-body");
     const meta = el("div", "post-meta");
     if (p.pinned) meta.appendChild(el("span", "post-pin", "Pinned"));
-    meta.appendChild(el("span", null, [p.author, fmtDate(p.date)].filter(Boolean).join(" · ")));
+    meta.appendChild(el("span", null, [p.author, fmtPostDate(p.date)].filter(Boolean).join(" · ")));
     body.appendChild(meta);
     body.appendChild(el("h3", "post-title", p.title || "Untitled"));
     body.appendChild(el("p", "post-abstract", p.abstract || ""));
@@ -568,7 +920,7 @@ function renderBlog() {
     list.appendChild(card);
   }
   const more = $("#blogMore");
-  more.textContent = "";
+  more.innerHTML = "";
   if (order.length > blogShown) {
     const b = el("button", "blog-more-btn", "↓ more posts");
     b.onclick = () => { blogShown += BLOG_STEP; renderBlog(); };
@@ -578,8 +930,8 @@ function renderBlog() {
 
 function openPost(p, i) {
   const panel = $("#readerPanel");
-  panel.textContent = "";
-  const close = el("button", "reader-close", "×");
+  panel.innerHTML = "";
+  const close = el("button", "reader-close", "✕");
   close.onclick = closeReader;
   panel.appendChild(close);
   const hero = el("img", "reader-hero");
@@ -587,7 +939,7 @@ function openPost(p, i) {
   hero.alt = "";
   panel.appendChild(hero);
   panel.appendChild(el("div", "reader-meta",
-    [p.author, fmtDate(p.date)].filter(Boolean).join(" · ")));
+    [p.author, fmtPostDate(p.date)].filter(Boolean).join(" · ")));
   panel.appendChild(el("h1", "reader-title", p.title || "Untitled"));
   const content = el("div", "reader-content");
   content.innerHTML = sanitize(p.body);
@@ -596,55 +948,184 @@ function openPost(p, i) {
   document.body.style.overflow = "hidden";
   close.focus();
 }
-
 function closeReader() {
   $("#blogReader").hidden = true;
   document.body.style.overflow = "";
 }
 
-/* ---------- wiring ---------- */
+// ---------- content that the database repo controls ----------
+function applyMeta(meta) {
+  if (!meta) return;
+  const n = (x) => (x || 0).toLocaleString("en-US").replace(/,/g, " ");
+  $("#heroYears").textContent = meta.year_range || "2008-2025";
+  const d = meta.distinct || {};
+  const segs = [
+    n(meta.record_count) + " projects",
+    (meta.years || []).length + " years (" + (meta.year_range || "") + ")",
+    n(d.molecule) + " molecules", n(d.chassis) + " chassis",
+    n(d.technique) + " techniques", n(d.part) + " parts",
+  ];
+  $("#stats").textContent = segs.join(" · ");
+  const hs = $("#heroStats");
+  hs.innerHTML = "";
+  segs.forEach((s, i) => {
+    if (i) hs.appendChild(el("span", "dot", "·"));
+    hs.appendChild(el("span", "seg", s));
+  });
+}
 
+function applySite(site) {
+  if (site.hero && site.hero.year_range) $("#heroYears").textContent = site.hero.year_range;
+  if (site.stats && Array.isArray(site.stats.segments) && site.stats.segments.length) {
+    const hs = $("#heroStats");
+    hs.innerHTML = "";
+    site.stats.segments.forEach((s, i) => {
+      if (i) hs.appendChild(el("span", "dot", "·"));
+      hs.appendChild(el("span", "seg", String(s)));
+    });
+  }
+  const nav = site.nav_button || {};
+  const btn = $("#customBtn");
+  if (nav.enabled && nav.page) {
+    btn.textContent = nav.label || "More";
+    btn.hidden = false;
+    btn.onclick = () => openCustom(nav.page);
+  } else {
+    btn.hidden = true;
+  }
+  if (site.parts_button === true) $("#partsBtn").hidden = false;
+}
+
+async function loadRemoteContent(base) {
+  try { applySite(await fetchGz(base + "site.json", withTimeout(REMOTE_TIMEOUT))); }
+  catch (e) { /* built-in wording stays */ }
+  try {
+    const d = await fetchGz(base + "posts.json", withTimeout(REMOTE_TIMEOUT));
+    state.posts = Array.isArray(d) ? d : (d.posts || []);
+    renderBlog();
+  } catch (e) { /* no posts */ }
+}
+
+/* Concept mode needs the LSA model. It loads after the first paint; until it
+   arrives (or if it never does) only Keyword is offered, same as before. */
+async function loadConcept(base) {
+  if (state.semantic) return;
+  try {
+    const model = await fetchGz(base + "lsa.json.gz");
+    const ok = await askWorker({ type: "lsa", model });
+    if (ok && ok.ok) {
+      state.semantic = true;
+      const p = new URLSearchParams(location.search).get("mode");
+      if (MODES.some(([id]) => id === p)) state.mode = p;
+      renderModeToggle();
+      setMode();
+    }
+  } catch (e) { /* keyword only */ }
+}
+
+function showNote(msg) {
+  const n = $("#dataNote");
+  n.textContent = msg;
+  n.hidden = false;
+  setTimeout(() => { n.hidden = true; }, 9000);
+}
+
+// ---------- boot ----------
 const isNarrow = () => window.matchMedia("(max-width: 880px)").matches;
 
+async function boot() {
+  bindUI();
+  initDrawerResize();
+
+  let data = null, localManifest = null;
+  try {
+    [data, localManifest] = await Promise.all([
+      loadBundles("baseline/"),
+      fetchGz("baseline/manifest.json").catch(() => null),
+    ]);
+  } catch (e) {
+    showNote("The bundled data could not be read. The page cannot search.");
+    return;
+  }
+  startWorker(data);
+  applyMeta(data.meta);
+  readURL();
+  await run(false);
+  loadConcept("baseline/");
+
+  // Only fetch what the database repo actually has a newer version of.
+  const remote = await findRemote();
+  if (!remote) {
+    showNote("Showing the built-in 2008-2025 archive (database repo unreachable).");
+    return;
+  }
+  state.base = remote.base;
+  state.fulltextBases = DATA_ORIGINS;
+  const changed = changedBundles(localManifest, remote.manifest);
+  if (changed.length) {
+    try {
+      const fresh = await loadBundles(remote.base, changed);
+      startWorker(Object.assign({}, data, fresh));
+      if (fresh.meta) applyMeta(fresh.meta);
+      _records = null; _partsData = null;
+      await run(false);
+    } catch (e) { /* keep the baseline */ }
+  }
+  if (!changed.length) {
+    worker.postMessage({ type: "fulltext", bases: state.fulltextBases });
+  }
+  loadRemoteContent(remote.base);
+  loadConcept(remote.base);
+}
+
 function bindUI() {
-  $("#searchBtn").onclick = () => { state.q = $("#q").value; state.page = 1; run(true); };
-  $("#q").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { state.q = $("#q").value; state.page = 1; run(true); }
-  });
+  const go = () => { state.q = $("#q").value; state.page = 1; run(true); };
+  $("#searchBtn").onclick = go;
+  $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   $("#brandHome").onclick = () => {
     state.q = ""; state.filters = {}; state.page = 1;
     $("#q").value = "";
     run(true);
   };
-  const clearAll = () => { state.filters = {}; state.page = 1; run(true); };
-  $("#clearFilters").onclick = clearAll;
-  $("#clearFiltersTop").onclick = clearAll;
-  $("#filterBtn").onclick = () => {
+  $("#clearFilters").onclick = () => { state.filters = {}; state.page = 1; run(true); };
+  $("#partsBtn").onclick = openParts;
+  $("#partsFilter").addEventListener("input", (e) => renderParts(e.target.value));
+
+  const showFacets = () => {
     $("#facets").hidden = false;
     $("#facets").classList.add("open");
     $("#facetsScrim").hidden = false;
-    $("#closeFacets").hidden = false;
   };
   const hideFacets = () => {
     $("#facets").classList.remove("open");
     $("#facetsScrim").hidden = true;
     if (isNarrow()) $("#facets").hidden = true;
   };
+  $("#filterBtn").onclick = showFacets;
   $("#facetsScrim").onclick = hideFacets;
   $("#closeFacets").onclick = hideFacets;
+
   $("#drawer").querySelector(".drawer-bg").onclick = closeDrawer;
   $("#blogReader").querySelector(".reader-bg").onclick = closeReader;
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!$("#blogReader").hidden) closeReader();
     else if (!$("#drawer").hidden) closeDrawer();
-    else if (!$("#customView").hidden) { closeCustom(); }
+    else if (!$("#partsView").hidden) closeParts();
+    else if (!$("#customView").hidden) closeCustom();
   });
   window.addEventListener("popstate", () => { readURL(); run(false); });
   window.addEventListener("resize", () => {
     if (!hasQuery()) return;
-    if (!isNarrow()) { $("#facets").hidden = false; $("#filterBtn").hidden = true; $("#facetsScrim").hidden = true; }
-    else if (!$("#facets").classList.contains("open")) { $("#facets").hidden = true; $("#filterBtn").hidden = false; }
+    if (!isNarrow()) {
+      $("#facets").hidden = false;
+      $("#facets").classList.remove("open");
+      $("#filterBtn").hidden = true;
+      $("#facetsScrim").hidden = true;
+    } else if (!$("#facets").classList.contains("open")) {
+      $("#facets").hidden = true;
+      $("#filterBtn").hidden = false;
+    }
   });
 }
 

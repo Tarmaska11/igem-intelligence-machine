@@ -17,7 +17,12 @@ NOT_TEAMS = {
     "template", "templates", "main", "home", "index", "test", "sandbox",
     "notebook", "results", "team", "teams", "project", "collaborations",
     "humanpractices", "attributions", "judging", "medals", "sponsors",
+    "example", "example2", "example3", "gallery", "teamname", "yourteam",
+    "placeholder", "untitled", "demo", "wikitemplate", "xyzlink",
 }
+
+# Names that are obviously a template placeholder rather than a real team.
+JUNK_NAME = re.compile(r"[\[\]{}<>]|^(your|insert|enter)|^tbd$", re.I)
 
 # Words that appear in one spelling of a name but not the other.
 _NOISE = re.compile(
@@ -63,7 +68,7 @@ class TeamDirectory(object):
     def lookup(self, team_name, year):
         """Return (row, how) or (None, reason)."""
         s = slug(team_name)
-        if s in NOT_TEAMS:
+        if s in NOT_TEAMS or JUNK_NAME.search(team_name or ""):
             return None, "not-a-team"
         try:
             year = int(year)

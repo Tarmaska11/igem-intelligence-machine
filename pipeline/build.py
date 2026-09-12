@@ -25,7 +25,7 @@ SITE = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 import canon
-from teams_meta import NOT_TEAMS, TeamDirectory, slug
+from teams_meta import JUNK_NAME, NOT_TEAMS, TeamDirectory, slug
 
 CONF = json.load(open(os.path.join(HERE, "sources.json"), encoding="utf-8"))
 SRC = os.path.abspath(os.path.join(SITE, CONF["source_root"]))
@@ -35,6 +35,10 @@ DIST = os.path.join(SITE, "dist-data")
 
 TOKEN = re.compile(r"[a-z0-9]{2,32}")
 COMPOUND = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)+")
+# Bumped whenever the shape of the bundles changes. A site built for one
+# schema refuses bundles from another, so a bad publish cannot break it.
+DATA_SCHEMA = 2
+
 NSHARD = 256
 MIN_DF = 2
 
@@ -73,16 +77,36 @@ def tokens(text):
     return out
 
 
-def names(value):
-    """Facet fields are either a list of strings or a list of {name, importance, role}."""
-    items = value if isinstance(value, list) else ([value] if isinstance(value, str) else [])
-    for it in items:
+SCHEMA_FIELD = {"chassis": "chassis_organisms", "technique": "molecular_techniques",
+                "part": "biological_parts", "molecule": "target_molecules"}
+
+# The Registry uses two code shapes: BBa_K1234567 and the 2024+ BBa_25Y42N8F.
+_BBA_RE = re.compile(r"BBa[_\s]?([A-Za-z0-9]{4,12})", re.I)
+
+
+def part_registry(name):
+    """Registry id and URL for a part name, or (None, None) for a descriptive name."""
+    m = _BBA_RE.search(name or "")
+    if not m:
+        return None, None
+    code = "BBa_" + m.group(1).upper()
+    return code, "https://registry.igem.org/parts/%s" % code.lower().replace("_", "-")
+
+
+def items_of(value):
+    """Facet fields are a list of strings or a list of {name, importance, role}."""
+    raw = value if isinstance(value, list) else ([value] if isinstance(value, str) else [])
+    out = []
+    for it in raw:
         if isinstance(it, dict):
-            n = it.get("name")
-            if isinstance(n, str) and n.strip():
-                yield n.strip(), (it.get("importance") or "").lower()
+            nm = it.get("name")
+            if isinstance(nm, str) and nm.strip():
+                out.append({"name": nm.strip(),
+                            "importance": (it.get("importance") or "mentioned").lower(),
+                            "role": it.get("role") or ""})
         elif isinstance(it, str) and it.strip():
-            yield it.strip(), ""
+            out.append({"name": it.strip(), "importance": "core", "role": ""})
+    return out
 
 
 def model_of(d, path):
@@ -127,7 +151,7 @@ def build_records(seen, td, qa):
     out, dropped = [], collections.Counter()
     for (s, year), d in sorted(seen.items()):
         name = (d.get("team_name") or "").strip()
-        if s in NOT_TEAMS:
+        if s in NOT_TEAMS or JUNK_NAME.search(name):
             dropped["not-a-team"] += 1
             continue
         row, how = td.lookup(name, year)
@@ -145,18 +169,29 @@ def build_records(seen, td, qa):
             "rf": [x for x in (d.get("key_references") or []) if isinstance(x, str)],
             "ml": model_of(d, d.get("_src_path", "")),
         }
-        raw, core, facets = {}, [], collections.defaultdict(list)
+        core, facets = [], collections.defaultdict(list)
         for kind, field in FACET_FIELDS:
-            vals = []
-            for nm, imp in names(d.get(field)):
-                vals.append(nm)
-                if imp == "core":
-                    core.append(nm)
-                lab = canon.canon(kind, nm)
+            if kind == "domain":
+                lab = canon.canon("domain", d.get("application_domain"))
+                if lab:
+                    facets["domain"].append(lab)
+                continue
+            items = items_of(d.get(field))
+            for it in items:
+                if it["importance"] == "core":
+                    core.append(it["name"])
+                lab = canon.canon(kind, it["name"])
                 if lab and lab not in facets[kind]:
                     facets[kind].append(lab)
-            raw[kind] = vals
-        rec["raw"] = raw
+            if kind == "part":
+                for it in items:
+                    code, url = part_registry(it["name"])
+                    if code:
+                        it["registry_id"], it["registry_url"] = code, url
+            rec[SCHEMA_FIELD[kind]] = items
+        rec["target_molecules"] = [x["name"] for x in rec.get("target_molecules", [])]
+        rec["track"] = (d.get("track") or "").strip()
+        rec["application_domain"] = (d.get("application_domain") or "").strip()
         if row:
             rec["mt"] = how
             for kind, col in (("track", "village"), ("region", "region"),
@@ -195,6 +230,16 @@ def load_qa():
     return out
 
 
+def all_names(r):
+    out = list(r.get("target_molecules") or [])
+    for f in ("chassis_organisms", "molecular_techniques", "biological_parts"):
+        out.extend(x["name"] for x in (r.get(f) or []))
+    for f in ("track", "application_domain"):
+        if r.get(f):
+            out.append(r[f])
+    return out
+
+
 def build_index(records):
     """One inverted index over the summaries, with the field weights folded into tf."""
     postings = collections.defaultdict(list)
@@ -205,7 +250,7 @@ def build_index(records):
             weighted[t] += W_NAME
         for t in tokens(" ".join(r["core"])):
             weighted[t] += W_CORE
-        support = " ".join(sum(r["raw"].values(), []) + r["rf"])
+        support = " ".join(all_names(r) + r["rf"])
         for t in tokens(support):
             weighted[t] += W_SUPPORT
         body = " ".join([r["s"], r["p"], r["a"], r["n"]] + r["kr"] + r["fm"])
@@ -269,8 +314,39 @@ def sha(path):
 
 
 def card(r):
-    """The trimmed record the results list needs. Detail comes from records.json.gz."""
-    return {k: r[k] for k in ("id", "t", "y", "u", "s", "f") if k in r}
+    """What one result card draws. Full detail comes from records.json.gz."""
+    return {
+        "id": r["id"], "team_name": r["t"], "year": r["y"],
+        "domain": r.get("application_domain") or r.get("track") or "",
+        "summary": r.get("s") or "",
+        "needs_summary": not (r.get("s") or "").strip(),
+        "chassis": [{"name": x["name"], "importance": x["importance"]}
+                    for x in (r.get("chassis_organisms") or [])[:4]],
+        "techniques": [{"name": x["name"], "importance": x["importance"]}
+                       for x in (r.get("molecular_techniques") or [])[:4]],
+        "molecules": (r.get("target_molecules") or [])[:3],
+        "f": r.get("f", {}),
+    }
+
+
+def build_parts(records):
+    """Every biological part used anywhere, deduped, with a Registry link."""
+    agg = {}
+    for r in records:
+        for it in (r.get("biological_parts") or []):
+            name = it["name"]
+            key = re.sub(r"\s+", " ", name.lower())
+            slot = agg.get(key)
+            if slot is None:
+                code, url = part_registry(name)
+                slot = agg[key] = {"name": name, "count": 0, "teams": [],
+                                   "registry_id": code, "url": url, "coded": bool(code)}
+            slot["count"] += 1
+            if len(slot["teams"]) < 8:
+                slot["teams"].append(r["id"])
+    parts = sorted(agg.values(), key=lambda x: (-x["count"], x["name"].lower()))
+    return {"total_unique": len(agg), "coded": sum(1 for x in agg.values() if x["coded"]),
+            "parts": parts}
 
 
 def main():
@@ -300,10 +376,10 @@ def main():
         "counts": {k: len(v) for k, v in facets.items()},
         "models": dict(collections.Counter(r.get("ml", "unknown") for r in records).most_common()),
         "distinct": {
-            "molecule": len({x for r in records for x in r["raw"].get("molecule", [])}),
-            "chassis": len({x for r in records for x in r["raw"].get("chassis", [])}),
-            "technique": len({x for r in records for x in r["raw"].get("technique", [])}),
-            "part": len({x for r in records for x in r["raw"].get("part", [])}),
+            "molecule": len({x for r in records for x in (r.get("target_molecules") or [])}),
+            "chassis": len({x["name"] for r in records for x in (r.get("chassis_organisms") or [])}),
+            "technique": len({x["name"] for r in records for x in (r.get("molecular_techniques") or [])}),
+            "part": len({x["name"] for r in records for x in (r.get("biological_parts") or [])}),
         },
     }
 
@@ -314,6 +390,7 @@ def main():
                           ("records", records),
                           ("index", index),
                           ("facets", facets),
+                          ("parts", build_parts(records)),
                           ("meta", meta)):
             p = os.path.join(target, name + ".json.gz")
             raw, gz = write_gz(p, obj)
@@ -324,9 +401,9 @@ def main():
             print("   %-9s raw %7.1f MB   gz %6.2f MB" % (name, raw / 1e6, gz / 1e6))
         print("   %-9s %20s gz %6.2f MB" % ("TOTAL", "", total / 1e6))
 
-        man = {"schema": 1, "version": meta["built_at"], "generated_at": meta["built_at"],
-               "files": {}}
-        for name in ("cards", "records", "index", "facets", "meta"):
+        man = {"schema": DATA_SCHEMA, "version": meta["built_at"],
+               "generated_at": meta["built_at"], "files": {}}
+        for name in ("cards", "records", "index", "facets", "parts", "meta"):
             rel = name + ".json.gz"
             man["files"][name] = {"path": rel, "sha": sha(os.path.join(target, rel)),
                                   "bytes": os.path.getsize(os.path.join(target, rel))}
@@ -338,14 +415,29 @@ def main():
     print("\ndone in %.0fs" % (time.time() - t0))
 
 
-def wiki_path(rec):
+_WIKI_INDEX = None
+
+
+def wiki_paths():
+    """One scan of IGEM_CORPUS, mapping <team-slug>-<year> to its text file."""
+    global _WIKI_INDEX
+    if _WIKI_INDEX is not None:
+        return _WIKI_INDEX
+    _WIKI_INDEX = {}
     root = os.path.join(SRC, "IGEM_CORPUS")
-    for d in glob.glob(os.path.join(root, "*", str(rec["y"]))):
-        if slug(os.path.basename(os.path.dirname(d))) == rec["id"].rsplit("-", 1)[0]:
-            hits = glob.glob(os.path.join(d, "*.txt"))
-            if hits:
-                return hits[0]
-    return None
+    for team in os.listdir(root):
+        tdir = os.path.join(root, team)
+        if not os.path.isdir(tdir):
+            continue
+        for year in os.listdir(tdir):
+            ydir = os.path.join(tdir, year)
+            if not os.path.isdir(ydir):
+                continue
+            for fn in os.listdir(ydir):
+                if fn.lower().endswith(".txt"):
+                    _WIKI_INDEX.setdefault("%s-%s" % (slug(team), year), os.path.join(ydir, fn))
+                    break
+    return _WIKI_INDEX
 
 
 def build_fulltext(records):
@@ -354,10 +446,11 @@ def build_fulltext(records):
     os.makedirs(os.path.join(out, "text"), exist_ok=True)
     print("\n[fulltext] scanning wiki text ...")
 
+    index = wiki_paths()
     df = collections.Counter()
     paths = {}
     for i, r in enumerate(records):
-        p = wiki_path(r)
+        p = index.get(r["id"])
         if not p:
             continue
         paths[i] = p

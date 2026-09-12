@@ -1,32 +1,37 @@
 {
-  "schema": 1,
-  "version": "2026-09-12T13:40:05Z",
-  "generated_at": "2026-09-12T13:40:05Z",
+  "schema": 2,
+  "version": "2026-09-12T17:05:36Z",
+  "generated_at": "2026-09-12T17:05:36Z",
   "files": {
     "cards": {
       "path": "cards.json.gz",
-      "sha": "1ca444268d22ebb5",
-      "bytes": 1765557
+      "sha": "538e4d3c2e6b483d",
+      "bytes": 2009943
     },
     "records": {
       "path": "records.json.gz",
-      "sha": "81633d5351b69ef9",
-      "bytes": 4729892
+      "sha": "f338a537208c2b4c",
+      "bytes": 6055615
     },
     "index": {
       "path": "index.json.gz",
-      "sha": "9819cd1d1d9b2b2e",
-      "bytes": 1839073
+      "sha": "d5c53d6df84e73e0",
+      "bytes": 1842095
     },
     "facets": {
       "path": "facets.json.gz",
-      "sha": "28a1b6d03b248ceb",
-      "bytes": 450097
+      "sha": "61686781e0db228d",
+      "bytes": 449110
+    },
+    "parts": {
+      "path": "parts.json.gz",
+      "sha": "51c8c50d5afa2396",
+      "bytes": 402706
     },
     "meta": {
       "path": "meta.json.gz",
-      "sha": "aa1ec9529c41d783",
-      "bytes": 329
+      "sha": "66da6a6d6fe30987",
+      "bytes": 331
     }
   }
 }

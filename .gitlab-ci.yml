@@ -1,0 +1,28 @@
+# Runs on every push. The data test needs nothing but Python; the browser test
+# runs in the Playwright image and checks the page really works.
+stages: [test, deploy]
+
+data:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - python tests/test_data.py
+
+site:
+  stage: test
+  image: mcr.microsoft.com/playwright/python:v1.47.0-jammy
+  script:
+    - python -m http.server 8899 &
+    - sleep 3
+    - python tests/smoke.py http://127.0.0.1:8899/
+
+pages:
+  stage: deploy
+  image: python:3.12-slim
+  script:
+    - mkdir -p public
+    - cp -r index.html assets baseline public/
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

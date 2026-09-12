@@ -6,7 +6,7 @@ const TOKEN = /[a-z0-9]{2,32}/g;
 const ABBREV = /\b([a-z])\.\s*([a-z]{3,})\b/g;
 const COMPOUND = /[a-z0-9]+(?:[-_][a-z0-9]+)+/g;
 
-let CARDS = null, INDEX = null, FACETS = null;
+let CARDS = null, INDEX = null, FACETS = null, LSA = null;
 let FT = null;              // full-text: {base, shards:Map}
 let ftBase = null;
 
@@ -180,10 +180,10 @@ function facetCounts(resultIds) {
     for (const item of FACETS[kind]) {
       let n = 0;
       for (const d of item.d) if (set.has(d)) n++;
-      if (n) rows.push({ v: item.v, k: item.k || item.v, n: n });
+      if (n) rows.push({ value: item.v, key: item.k || item.v, count: n });
     }
-    if (kind === "year") rows.sort((a, b) => Number(b.v) - Number(a.v));
-    else rows.sort((a, b) => b.n - a.n || a.v.localeCompare(b.v));
+    if (kind === "year") rows.sort((a, b) => Number(b.value) - Number(a.value));
+    else rows.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
     if (rows.length) out[kind] = rows;
   }
   return out;
@@ -194,18 +194,95 @@ async function loadShard(term) {
   const h = shardOf(term);
   if (!FT.shards.has(h)) {
     FT.shards.set(h, (async () => {
-      try {
-        const url = ftBase + "fulltext/index/" + String(h).padStart(3, "0") + ".json.gz";
-        const r = await fetch(url);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
-        return JSON.parse(text);
-      } catch (e) {
-        return null;
+      for (const base of ftBase) {
+        try {
+          const url = base + "fulltext/index/" + String(h).padStart(3, "0") + ".json.gz";
+          const r = await fetch(url);
+          if (!r.ok) continue;
+          const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
+          return JSON.parse(text);
+        } catch (e) { /* try the next origin */ }
       }
+      return null;
     })());
   }
   return FT.shards.get(h);
+}
+
+/* The raw-wiki recall arm. A team whose summary missed the word but whose wiki
+   contains it still turns up, ranked below every summary hit - same as before. */
+async function wikiTail(units, allow, primary) {
+  if (!ftBase || !units.length) return [];
+  const wanted = new Set();
+  for (const unit of units) for (const spelling of unit) for (const w of spelling) wanted.add(w);
+  const shards = new Map();
+  await Promise.all(Array.from(wanted).map(async (w) => { shards.set(w, await loadShard(w)); }));
+
+  const listOf = (w) => {
+    const sh = shards.get(w);
+    const p = sh && sh[w];
+    if (!p) return null;
+    const [deltas, tfs] = p;
+    const ids = new Int32Array(deltas.length);
+    let prev = 0;
+    for (let i = 0; i < deltas.length; i++) { prev += deltas[i]; ids[i] = prev; }
+    return { ids, tfs };
+  };
+
+  // one score map per unit, OR-ing its spellings
+  const perUnit = [];
+  for (const unit of units) {
+    const acc = new Map();
+    for (const spelling of unit) {
+      const lists = [];
+      let ok = true;
+      for (const w of spelling) {
+        const l = listOf(w);
+        if (!l) { ok = false; break; }
+        lists.push(l);
+      }
+      if (!ok) continue;
+      lists.sort((a, b) => a.ids.length - b.ids.length);
+      const base = lists[0];
+      for (let i = 0; i < base.ids.length; i++) {
+        const id = base.ids[i];
+        let score = 0, present = true;
+        for (const l of lists) {
+          let lo = 0, hi = l.ids.length - 1, at = -1;
+          while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (l.ids[mid] === id) { at = mid; break; }
+            if (l.ids[mid] < id) lo = mid + 1; else hi = mid - 1;
+          }
+          if (at < 0) { present = false; break; }
+          score += Math.log(1 + l.tfs[at]) * Math.log(1 + CARDS.length / l.ids.length);
+        }
+        if (present) acc.set(id, Math.max(acc.get(id) || 0, score));
+      }
+    }
+    perUnit.push(acc);
+  }
+  if (!perUnit.length) return [];
+
+  let ids = null;
+  for (const acc of perUnit) {
+    if (ids === null) ids = new Set(acc.keys());
+    else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
+  }
+  if (!ids || !ids.size) {
+    ids = new Set();
+    for (const acc of perUnit) for (const id of acc.keys()) ids.add(id);
+  }
+  const out = [];
+  for (const id of ids) {
+    if (primary.has(id)) continue;
+    if (allow && !allow.has(id)) continue;
+    let s = 0;
+    for (const acc of perUnit) s += acc.get(id) || 0;
+    out.push([id, s]);
+  }
+  out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  return out.map((x) => x[0]);
 }
 
 /* Must match shard_of() in pipeline/build.py. */
@@ -215,14 +292,139 @@ function shardOf(term) {
   return h % 256;
 }
 
+/* A short passage around the first query word, like the old server snippet. */
+function snippet(text, words) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const low = t.toLowerCase();
+  let at = -1;
+  for (const w of words) {
+    const i = low.indexOf(w);
+    if (i >= 0 && (at < 0 || i < at)) at = i;
+  }
+  if (at < 0) return t.slice(0, 260) + (t.length > 260 ? " …" : "");
+  const start = Math.max(0, at - 90);
+  const end = Math.min(t.length, at + 190);
+  return (start ? "… " : "") + t.slice(start, end) + (end < t.length ? " …" : "");
+}
+
+/* ---- concept space (LSA), same model as the desktop build, quantised to int8 ---- */
+const LSA_STOP = new Set(("a an and are as at be by for from has have had he her his in into is it its of " +
+  "on or that the their them they this to was were will with we our us you your i me my been being do does " +
+  "did doing but not no nor so than then too very can could should would may might must shall about above " +
+  "after again against all any because before below between both during each few more most other some such " +
+  "only own same just now which who whom what when where why how here there project team teams igem wiki " +
+  "page year university student students member members http https www com org html index home overview " +
+  "description introduction").split(" "));
+const LSA_TOKEN = /[a-zA-Z][a-zA-Z0-9-]+/g;
+
+function b64ToI8(b64) {
+  const bin = atob(b64);
+  const out = new Int8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = (bin.charCodeAt(i) << 24) >> 24;
+  return out;
+}
+
+function lsaTokens(text) {
+  const out = [];
+  for (const raw of ((text || "").toLowerCase().match(LSA_TOKEN) || [])) {
+    const t = raw.replace(/^-+|-+$/g, "");
+    if (t.length < 3 || t.length > 30 || LSA_STOP.has(t)) continue;
+    if (/^\d+$/.test(t.replace(/-/g, ""))) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+function setLsa(model) {
+  const vi = new Map();
+  model.vocab.forEach((t, i) => vi.set(t, i));
+  LSA = {
+    k: model.k, n: model.n, v: model.v, vi: vi, idf: model.idf,
+    comp: b64ToI8(model.comp), compScale: model.comp_scale,
+    docs: b64ToI8(model.docs), docsScale: model.docs_scale,
+  };
+}
+
+/* Project a query into concept space, then cosine against every record. */
+function semanticScores(q) {
+  if (!LSA) return null;
+  const counts = new Map();
+  for (const t of lsaTokens(q)) counts.set(t, (counts.get(t) || 0) + 1);
+  const k = LSA.k;
+  const vec = new Float64Array(k);
+  let any = false;
+  for (const [t, c] of counts) {
+    const j = LSA.vi.get(t);
+    if (j === undefined) continue;
+    any = true;
+    const w = (1 + Math.log(c)) * LSA.idf[j];
+    const off = j * k;
+    for (let d = 0; d < k; d++) vec[d] += w * LSA.comp[off + d] * LSA.compScale;
+  }
+  if (!any) return null;
+  let nrm = 0;
+  for (let d = 0; d < k; d++) nrm += vec[d] * vec[d];
+  nrm = Math.sqrt(nrm) || 1;
+  for (let d = 0; d < k; d++) vec[d] /= nrm;
+
+  const out = new Float64Array(LSA.n);
+  for (let i = 0; i < LSA.n; i++) {
+    const off = i * k;
+    let s = 0;
+    for (let d = 0; d < k; d++) s += vec[d] * LSA.docs[off + d];
+    out[i] = s * LSA.docsScale;
+  }
+  return out;
+}
+
+const RRF_C = 60, SEM_TOPN = 400;
+
+/* Reciprocal rank fusion of the keyword ranking and the concept ranking. */
+function fuse(lexIds, sem, allow) {
+  const lexRank = new Map();
+  lexIds.forEach((id, i) => lexRank.set(id, i + 1));
+  const pool = [];
+  for (let i = 0; i < sem.length; i++) {
+    if (allow && !allow.has(i)) continue;
+    pool.push([i, sem[i]]);
+  }
+  pool.sort((a, b) => b[1] - a[1]);
+  const semRank = new Map();
+  pool.slice(0, SEM_TOPN).forEach(([id], i) => semRank.set(id, i + 1));
+
+  const all = new Set([...lexRank.keys(), ...semRank.keys()]);
+  const scored = [];
+  for (const id of all) {
+    let s = 0;
+    if (lexRank.has(id)) s += 1 / (RRF_C + lexRank.get(id));
+    if (semRank.has(id)) s += 1 / (RRF_C + semRank.get(id));
+    scored.push([id, s]);
+  }
+  scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  return scored.map((x) => x[0]);
+}
+
 self.onmessage = async (ev) => {
   const msg = ev.data;
+
+  if (msg.type === "fulltext") {
+    ftBase = (msg.bases && msg.bases.length) ? msg.bases : null;
+    FT = { base: ftBase, shards: new Map() };
+    return;
+  }
+
+  if (msg.type === "lsa") {
+    try { setLsa(msg.model); self.postMessage({ seq: msg.seq, ok: true }); }
+    catch (e) { self.postMessage({ seq: msg.seq, ok: false }); }
+    return;
+  }
 
   if (msg.type === "load") {
     CARDS = msg.cards;
     INDEX = msg.index;
     FACETS = msg.facets;
-    ftBase = msg.fulltextBase || null;
+    ftBase = (msg.fulltextBases && msg.fulltextBases.length) ? msg.fulltextBases : null;
     FT = { base: ftBase, shards: new Map() };
     self.postMessage({ type: "ready", n: CARDS.length, terms: Object.keys(INDEX.terms).length });
     return;
@@ -232,7 +434,7 @@ self.onmessage = async (ev) => {
     const t0 = performance.now();
     const allow = allowedByFilters(msg.filters);
     const units = parseQuery(msg.q);
-    let ids, scores = null, matchMode = null;
+    let ids, scores = null, matchMode = null, wikiOnly = new Set(), usedMode = "lexical";
 
     if (!units.length) {
       ids = allow ? Array.from(allow) : CARDS.map((_, i) => i);
@@ -242,20 +444,36 @@ self.onmessage = async (ev) => {
       scores = res.scored;
       matchMode = res.mode;
       ids = scores.map((s) => s[0]);
+      if (msg.mode === "hybrid" && LSA) {
+        const sem = semanticScores(msg.q);
+        if (sem) { ids = fuse(ids, sem, allow); usedMode = "hybrid"; }
+      }
+      const primary = new Set(ids);
+      const tail = await wikiTail(units, allow, primary);
+      wikiOnly = new Set(tail);
+      ids = ids.concat(tail);
     }
 
     const page = Math.max(1, msg.page || 1);
     const size = msg.pageSize || 20;
     const slice = ids.slice((page - 1) * size, page * size);
+    const words = [];
+    for (const unit of units) for (const spelling of unit) for (const w of spelling) words.push(w);
+    const results = slice.map((i) => {
+      const c = CARDS[i];
+      const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
+      if (wikiOnly.has(i)) r.wiki_only = true;
+      return r;
+    });
     self.postMessage({
       type: "results",
       seq: msg.seq,
       total: ids.length,
       page: page,
+      mode: usedMode,
       matchMode: matchMode,
       ms: Math.round(performance.now() - t0),
-      ids: slice,
-      cards: slice.map((i) => CARDS[i]),
+      results: results,
       facets: facetCounts(ids),
     });
   }

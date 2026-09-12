@@ -143,3 +143,13 @@ not written by hand. This matters when you read a record, so it is stated plainl
 
 MIT — see [LICENSE](LICENSE). The wiki content summarised here belongs to the respective
 iGEM teams.
+
+## Tests
+
+```
+python tests/test_data.py                      # the built data: checksums, counts, filters
+python tests/smoke.py http://127.0.0.1:8899/   # the page: every feature, desktop + phone
+```
+
+`tests/smoke.py` needs playwright (`pip install playwright && playwright install chromium`).
+Both run in GitLab CI on every push — see `.gitlab-ci.yml`.

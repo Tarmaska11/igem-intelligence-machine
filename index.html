@@ -12,23 +12,27 @@
 
 <header id="topbar">
   <div class="brand" id="brandHome" title="Home">
-    <span class="logo">&#10037;</span>
+    <span class="logo">✵</span>
     <span class="wordmark">iGEM <b>Intelligence</b> Machine</span>
   </div>
   <div id="headerSearch" class="header-search"></div>
+  <div id="modeToggle" class="modetoggle" role="tablist" aria-label="Search mode" hidden></div>
   <div class="navcluster">
-    <button id="filterBtn" class="navlink filter-btn" hidden>Filters</button>
+    <button id="filterBtn" class="navlink" hidden>Filters</button>
+    <button id="partsBtn" class="navlink" title="Browse every biological part used, linked to the iGEM Registry" hidden>⊞ Parts registry</button>
     <button id="customBtn" class="navlink" hidden></button>
   </div>
+  <div id="stats" class="stats"></div>
 </header>
 
 <main>
   <aside id="facets" hidden>
     <div class="facets-head">
       <h2>Filters</h2>
-      <button id="closeFacets" class="link facets-close" hidden>close</button>
+      <button id="closeFacets" class="link facets-close">close</button>
       <button id="clearFilters" class="link">clear all</button>
     </div>
+    <div id="activeChips" class="chips"></div>
     <div id="facetGroups"></div>
   </aside>
   <div id="facetsScrim" class="facets-scrim" hidden></div>
@@ -46,6 +50,7 @@
           <button id="searchBtn" aria-label="search">Search</button>
         </div>
       </div>
+      <!-- stats sit outside #blog so they still show when there are no posts -->
       <div id="heroStats" class="hero-stats"></div>
       <section id="blog" class="blog" hidden>
         <div id="blogList" class="blog-list"></div>
@@ -53,17 +58,23 @@
       </section>
     </div>
 
-    <div id="activeBar" class="active-bar" hidden>
-      <div id="activeChips" class="chips"></div>
-      <button id="clearFiltersTop" class="link">clear all</button>
-    </div>
-
     <div id="resultsHead" class="results-head" hidden>
       <span id="resultCount"></span>
       <div class="sortnote" id="sortnote">ranked by relevance</div>
     </div>
+    <div id="aiNote" class="ai-note" hidden></div>
     <div id="results" class="results"></div>
     <div id="pager" class="pager" hidden></div>
+  </section>
+
+  <section id="partsView" hidden>
+    <div class="parts-head">
+      <h1>Biological parts registry</h1>
+      <p id="partsSummary" class="parts-summary"></p>
+      <input id="partsFilter" type="search" autocomplete="off"
+             placeholder="Filter parts…  e.g.  BBa_K, promoter, GFP, terminator">
+    </div>
+    <div id="partsList" class="parts-list"></div>
   </section>
 
   <section id="customView" hidden>
@@ -74,8 +85,10 @@
 <div id="drawer" class="drawer" hidden>
   <div class="drawer-bg"></div>
   <div class="drawer-panel" id="drawerPanel"></div>
+  <div id="drawerResizer" class="drawer-resizer" title="Drag to resize panel"></div>
 </div>
 
+<!-- Full-screen reading overlay for a single blog post -->
 <div id="blogReader" class="blog-reader" hidden>
   <div class="reader-bg" aria-hidden="true"></div>
   <article class="reader-panel" id="readerPanel" role="dialog" aria-modal="true"></article>
