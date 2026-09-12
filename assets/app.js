@@ -40,7 +40,7 @@ const state = {
   q: "", filters: {}, page: 1,
   meta: null, site: null, posts: [],
   source: "baseline", base: "baseline/",
-  records: null, lastResults: null, seq: 0,
+  records: null, labels: {}, seq: 0,
 };
 
 let worker = null;
@@ -72,23 +72,36 @@ async function findRemote() {
   return null;
 }
 
-async function loadBundles(base) {
-  const [cards, index, facets, meta] = await Promise.all([
-    fetchGz(base + "cards.json.gz"),
-    fetchGz(base + "index.json.gz"),
-    fetchGz(base + "facets.json.gz"),
-    fetchGz(base + "meta.json.gz"),
-  ]);
-  return { cards, index, facets, meta };
+const BUNDLES = ["cards", "index", "facets", "meta"];
+
+async function loadBundles(base, only) {
+  const want = only || BUNDLES;
+  const got = {};
+  await Promise.all(want.map(async (name) => {
+    got[name] = await fetchGz(base + name + ".json.gz");
+  }));
+  return got;
+}
+
+/* Which bundles the database repo actually has a different version of. */
+function changedBundles(local, remote) {
+  if (!local || !local.files || !remote || !remote.files) return BUNDLES;
+  return BUNDLES.filter((n) => {
+    const a = local.files[n], b = remote.files[n];
+    return !a || !b || a.sha !== b.sha;
+  });
 }
 
 async function boot() {
   bindUI();
   renderBlog();
 
-  let data = null;
+  let data = null, localManifest = null;
   try {
-    data = await loadBundles("baseline/");
+    [data, localManifest] = await Promise.all([
+      loadBundles("baseline/"),
+      fetchGz("baseline/manifest.json").catch(() => null),
+    ]);
     state.source = "baseline";
   } catch (e) {
     showNote("The bundled data could not be read. The page cannot search.");
@@ -99,19 +112,21 @@ async function boot() {
   readURL();
   run(false);
 
-  // Now see whether the database repo has something newer.
+  // Now see whether the database repo has something newer. Only the bundles whose
+  // checksum differs get downloaded, so the usual visit fetches nothing twice.
   const remote = await findRemote();
   if (!remote) { showNote("Showing the built-in 2008-2025 archive (database repo unreachable)."); return; }
   state.base = remote.base;
-  try {
-    const fresh = await loadBundles(remote.base);
-    if (fresh.meta && fresh.meta.built_at !== data.meta.built_at) {
-      startWorker(fresh);
-      applyMeta(fresh.meta);
+  const changed = changedBundles(localManifest, remote.manifest);
+  if (changed.length) {
+    try {
+      const fresh = await loadBundles(remote.base, changed);
+      startWorker(Object.assign({}, data, fresh));
+      if (fresh.meta) applyMeta(fresh.meta);
       state.source = "remote";
       run(false);
-    }
-  } catch (e) { /* keep the baseline */ }
+    } catch (e) { /* keep the baseline */ }
+  }
   loadRemoteContent(remote.base);
 }
 
@@ -222,10 +237,10 @@ function run(push) {
   const searching = hasQuery();
   $("#hero").hidden = searching;
   $("#resultsHead").hidden = !searching;
+  if (!searching) $("#activeBar").hidden = true;
   $("#pager").hidden = !searching;
   $("#facets").hidden = !searching || isNarrow();
   $("#filterBtn").hidden = !searching || !isNarrow();
-  $("#results").textContent = "";
 
   // in results mode the search box moves up into the header
   const wrap = document.querySelector(".searchwrap");
@@ -245,7 +260,6 @@ function onWorkerMessage(ev) {
   const m = ev.data;
   if (m.type === "ready") return;
   if (m.type !== "results" || m.seq !== state.seq) return;
-  state.lastResults = m;
   renderResults(m);
   renderFacets(m.facets);
   renderChips();
@@ -300,14 +314,17 @@ function renderFacets(facets) {
     head.appendChild(el("span", "facet-n", String(rows.length)));
     const list = el("div", "facet-list");
     const selected = new Set(state.filters[kind] || []);
+    state.labels[kind] = state.labels[kind] || {};
     let shown = FACET_SHOW;
     const paint = () => {
       list.textContent = "";
       for (const r of rows.slice(0, shown)) {
-        const row = el("div", "facet-item" + (selected.has(r.v) ? " on" : ""));
+        const key = r.k || r.v;
+        state.labels[kind][key] = r.v;
+        const row = el("div", "facet-item" + (selected.has(key) ? " on" : ""));
         row.appendChild(el("span", "facet-v", r.v));
         row.appendChild(el("span", "facet-c", String(r.n)));
-        row.onclick = () => toggleFacet(kind, r.v);
+        row.onclick = () => toggleFacet(kind, key);
         list.appendChild(row);
       }
       if (rows.length > shown) {
@@ -327,13 +344,17 @@ function renderFacets(facets) {
 function renderChips() {
   const box = $("#activeChips");
   box.textContent = "";
+  let any = false;
   for (const kind of Object.keys(state.filters)) {
-    for (const v of state.filters[kind]) {
-      const chip = el("button", "chip", v + "  ×");
-      chip.onclick = () => toggleFacet(kind, v);
+    for (const key of state.filters[kind]) {
+      const label = (state.labels[kind] && state.labels[kind][key]) || key;
+      const chip = el("button", "chip", label + "  ×");
+      chip.onclick = () => toggleFacet(kind, key);
       box.appendChild(chip);
+      any = true;
     }
   }
+  $("#activeBar").hidden = !any;
 }
 
 function toggleFacet(kind, value) {
@@ -595,7 +616,9 @@ function bindUI() {
     $("#q").value = "";
     run(true);
   };
-  $("#clearFilters").onclick = () => { state.filters = {}; state.page = 1; run(true); };
+  const clearAll = () => { state.filters = {}; state.page = 1; run(true); };
+  $("#clearFilters").onclick = clearAll;
+  $("#clearFiltersTop").onclick = clearAll;
   $("#filterBtn").onclick = () => {
     $("#facets").hidden = false;
     $("#facets").classList.add("open");

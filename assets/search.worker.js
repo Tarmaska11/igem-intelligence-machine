@@ -164,7 +164,7 @@ function allowedByFilters(filters) {
     const wanted = new Set(filters[kind]);
     const ids = new Set();
     for (const item of (FACETS[kind] || [])) {
-      if (wanted.has(item.v)) for (const d of item.d) ids.add(d);
+      if (wanted.has(item.k || item.v)) for (const d of item.d) ids.add(d);
     }
     if (allow === null) allow = ids;
     else for (const id of Array.from(allow)) if (!ids.has(id)) allow.delete(id);
@@ -180,7 +180,7 @@ function facetCounts(resultIds) {
     for (const item of FACETS[kind]) {
       let n = 0;
       for (const d of item.d) if (set.has(d)) n++;
-      if (n) rows.push({ v: item.v, n: n });
+      if (n) rows.push({ v: item.v, k: item.k || item.v, n: n });
     }
     if (kind === "year") rows.sort((a, b) => Number(b.v) - Number(a.v));
     else rows.sort((a, b) => b.n - a.n || a.v.localeCompare(b.v));

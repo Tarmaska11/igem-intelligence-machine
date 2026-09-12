@@ -526,3 +526,8 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 
 .tagrow{min-width:0}
 .card{min-width:0}
+
+/* active filters sit above the results so they are visible on a phone too */
+.active-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 0 4px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.active-bar .chips{margin:0;flex:1}

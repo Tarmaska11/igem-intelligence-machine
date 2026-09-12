@@ -85,6 +85,21 @@ def names(value):
             yield it.strip(), ""
 
 
+def model_of(d, path):
+    """Which model produced this summary. Used for the AI disclosure in the README.
+
+    The local pass records it in _generation; the earlier worker passes only encode
+    it in the file name (metadata_gemini.json and so on).
+    """
+    gen = d.get("_generation") or {}
+    name = gen.get("model") or d.get("Processed by") or ""
+    if not name:
+        base = os.path.basename(path)
+        if base.startswith("metadata_") and base.endswith(".json"):
+            name = base[len("metadata_"):-len(".json")]
+    return re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
+
+
 def load_records():
     seen = {}
     for entry in CONF["summaries"]:
@@ -103,6 +118,7 @@ def load_records():
             key = (slug(d.get("team_name")), year)
             if not key[0]:
                 continue
+            d["_src_path"] = path
             seen.setdefault(key, d)
     return seen
 
@@ -127,6 +143,7 @@ def build_records(seen, td, qa):
             "kr": [x for x in (d.get("key_results") or []) if isinstance(x, str)],
             "fm": [x for x in (d.get("failure_modes") or []) if isinstance(x, str)],
             "rf": [x for x in (d.get("key_references") or []) if isinstance(x, str)],
+            "ml": model_of(d, d.get("_src_path", "")),
         }
         raw, core, facets = {}, [], collections.defaultdict(list)
         for kind, field in FACET_FIELDS:
@@ -212,6 +229,13 @@ def build_index(records):
     return {"n": len(records), "avgdl": round(avg, 2), "dl": lengths, "terms": index}
 
 
+def facet_key(kind, value):
+    """Stable id for a facet value. Links use this, not the label, so renaming a
+    label later does not break every URL people have shared."""
+    k = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return k or "x"
+
+
 def build_facets(records):
     groups = collections.defaultdict(lambda: collections.defaultdict(list))
     for i, r in enumerate(records):
@@ -223,7 +247,8 @@ def build_facets(records):
         items = sorted(vals.items(), key=lambda kv: (-len(kv[1]), kv[0]))
         if kind == "year":
             items = sorted(vals.items(), key=lambda kv: -int(kv[0]))
-        out[kind] = [{"v": v, "n": len(ids), "d": ids} for v, ids in items]
+        out[kind] = [{"v": v, "k": facet_key(kind, v), "n": len(ids), "d": ids}
+                     for v, ids in items]
     return out
 
 
@@ -273,6 +298,7 @@ def main():
         "years": years,
         "year_range": "%d-%d" % (years[0], years[-1]),
         "counts": {k: len(v) for k, v in facets.items()},
+        "models": dict(collections.Counter(r.get("ml", "unknown") for r in records).most_common()),
         "distinct": {
             "molecule": len({x for r in records for x in r["raw"].get("molecule", [])}),
             "chassis": len({x for r in records for x in r["raw"].get("chassis", [])}),

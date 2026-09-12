@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "2026-09-12T13:30:41Z",
-  "generated_at": "2026-09-12T13:30:41Z",
+  "version": "2026-09-12T13:40:05Z",
+  "generated_at": "2026-09-12T13:40:05Z",
   "files": {
     "cards": {
       "path": "cards.json.gz",
@@ -10,8 +10,8 @@
     },
     "records": {
       "path": "records.json.gz",
-      "sha": "5254afa2c22df024",
-      "bytes": 4721921
+      "sha": "81633d5351b69ef9",
+      "bytes": 4729892
     },
     "index": {
       "path": "index.json.gz",
@@ -20,13 +20,13 @@
     },
     "facets": {
       "path": "facets.json.gz",
-      "sha": "cc8fe615fb6aaeb6",
-      "bytes": 352107
+      "sha": "28a1b6d03b248ceb",
+      "bytes": 450097
     },
     "meta": {
       "path": "meta.json.gz",
-      "sha": "a8ae6723db967376",
-      "bytes": 274
+      "sha": "aa1ec9529c41d783",
+      "bytes": 329
     }
   }
 }
