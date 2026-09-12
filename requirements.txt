@@ -1,0 +1,2 @@
+# The build pipeline uses only the Python standard library.
+# Python 3.9 or newer.

@@ -1,0 +1,8 @@
+{
+  "source_root": "../..",
+  "teams_csv": "iGEM Intelligence Machine/csv",
+  "summaries": [
+    { "root": "Finished DataBase",   "glob": "**/metadata_*.json" },
+    { "root": "Output/pure json",    "glob": "**/metadata_*.json" }
+  ]
+}
