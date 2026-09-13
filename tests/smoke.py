@@ -30,7 +30,11 @@ def main():
         browser = pw.chromium.launch(headless=True)
         errors = []
         page = browser.new_page(viewport={"width": 1400, "height": 900})
-        page.on("pageerror", lambda e: errors.append(str(e)))
+        # A team's own wiki is embedded in an iframe and runs its decade-old
+        # scripts, which throw in a modern browser. That is not our code, so stop
+        # collecting while that frame is on screen.
+        watching = [True]
+        page.on("pageerror", lambda e: errors.append(str(e)) if watching[0] else None)
 
         print("home page")
         page.goto(BASE, wait_until="domcontentloaded")
@@ -87,12 +91,17 @@ def main():
         check("width is remembered",
               page.evaluate("()=>localStorage.getItem('igem_drawer_width')") is not None)
 
+        watching[0] = False        # the embedded wiki is about to load
         page.locator(".dtab").nth(1).click()
         page.wait_for_timeout(2500)
         check("wiki column", page.locator(".wiki-col").count() == 1)
         check("ai column", page.locator(".ai-col").count() == 1)
-        check("live / saved toggle",
-              [x.inner_text() for x in page.locator(".wiki-mode").all()] == ["Live wiki", "Saved text"])
+        modes = [x.inner_text() for x in page.locator(".wiki-mode").all()]
+        # pre-2022 wikis are embedded from the Internet Archive, so the first tab
+        # is labelled "Archived wiki" for those years
+        check("wiki / saved toggle",
+              len(modes) == 2 and modes[0] in ("Live wiki", "Archived wiki")
+              and modes[1] == "Saved text", modes)
         check("ask-ai controls",
               page.locator(".ai-key").count() == 1 and page.locator(".ai-send").count() == 1)
         page.locator(".ai-q").fill("test")
@@ -103,6 +112,8 @@ def main():
 
         print("blog")
         page.keyboard.press("Escape")
+        page.wait_for_timeout(600)
+        watching[0] = True         # back to our own pages
         page.wait_for_timeout(300)
         page.click("#brandHome")
         page.wait_for_timeout(1500)
@@ -148,7 +159,7 @@ def main():
         page.wait_for_timeout(700)
         check("filter panel opens", page.locator("#facets").is_visible())
 
-        check("no javascript errors", not errors, errors[:3])
+        check("no javascript errors in our own code", not errors, errors[:3])
         browser.close()
 
     print("\n%d checks, %d failed" % (checks, len(failures)))
