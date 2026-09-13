@@ -1022,12 +1022,22 @@ async function loadVisits(cfg) {
   if (typeof cfg.value === "number") {
     n = cfg.value;
   } else if (cfg.endpoint) {
-    try {
-      const r = await fetch(cfg.endpoint, { signal: withTimeout(REMOTE_TIMEOUT) });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const v = pluck(await r.json(), cfg.field);
-      if (v != null && !isNaN(Number(v))) n = Number(v);
-    } catch (e) { return; }
+    // count once per browser session, not per page view - it keeps the number
+    // meaningful and keeps a free counter well inside its write limits
+    let cached = null;
+    try { cached = sessionStorage.getItem("igem_visits"); } catch (e) {}
+    if (cached !== null && !isNaN(Number(cached))) {
+      n = Number(cached);
+    } else {
+      try {
+        const r = await fetch(cfg.endpoint, { signal: withTimeout(REMOTE_TIMEOUT) });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const v = pluck(await r.json(), cfg.field);
+        if (v == null || isNaN(Number(v))) return;
+        n = Number(v);
+        try { sessionStorage.setItem("igem_visits", String(n)); } catch (e) {}
+      } catch (e) { return; }
+    }
   }
   if (n == null) return;
   _visitPill = el("span", "seg",
