@@ -197,7 +197,10 @@ async function loadShard(term) {
       for (const base of ftBase) {
         try {
           const url = base + "fulltext/index/" + String(h).padStart(3, "0") + ".json.gz";
-          const r = await fetch(url);
+          // a slow shard must never hold up the results the page already has
+          const ctl = new AbortController();
+          const timer = setTimeout(() => ctl.abort(), 8000);
+          const r = await fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(timer));
           if (!r.ok) continue;
           const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
           return JSON.parse(text);

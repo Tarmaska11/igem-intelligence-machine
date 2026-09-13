@@ -1091,6 +1091,8 @@ async function boot() {
   }
   if (!changed.length && state.fulltextBases) {
     worker.postMessage({ type: "fulltext", bases: state.fulltextBases });
+    // the first search already ran without the wiki index, so ask again
+    if (hasQuery()) run(false);
   }
   loadRemoteContent(remote.base);
   loadConcept(remote.base);
