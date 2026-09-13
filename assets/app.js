@@ -50,6 +50,7 @@ const state = {
   wantedMode: DEFAULT_MODE,   // mode asked for in the URL, applied once it can be
   lastRes: null,
   labels: {},           // kind -> {key: display label}
+  view: null,           // "custom" or "parts" when one of those pages is open
   base: "baseline/",    // where wiki text and the LSA model come from
   fulltextBases: null,  // set only once a database repo has been accepted
   meta: null,
@@ -173,6 +174,8 @@ function readURL() {
   const wanted = MODES.some(([id]) => id === m) ? m : DEFAULT_MODE;
   state.wantedMode = wanted;
   state.mode = state.semantic ? wanted : "lexical";
+  const v = p.get("view");
+  state.view = (v === "custom" || v === "parts") ? v : null;
   state.filters = {};
   for (const [k] of FACET_KINDS) {
     const vals = p.getAll(k);
@@ -185,6 +188,7 @@ function writeURL(push) {
   if (state.q) p.set("q", state.q);
   if (state.mode !== DEFAULT_MODE) p.set("mode", state.mode);
   if (state.page > 1) p.set("page", state.page);
+  if (state.view) p.set("view", state.view);
   for (const k in state.filters) for (const v of state.filters[k]) p.append(k, v);
   const url = location.pathname + (p.toString() ? "?" + p.toString() : "");
   if (push) history.pushState({}, "", url); else history.replaceState({}, "", url);
@@ -761,8 +765,10 @@ function initDrawerResize() {
 }
 
 // ---------- parts registry view ----------
-async function openParts() {
+async function openParts(push) {
   closeCustom();
+  state.view = "parts";
+  if (push !== false) writeURL(true);
   $("#content").hidden = true;
   $("#facets").hidden = true;
   $("#partsView").hidden = false;
@@ -781,6 +787,7 @@ function closeParts() {
   $("#partsView").hidden = true;
   $("#content").hidden = false;
   $("#partsBtn").classList.remove("on");
+  if (state.view === "parts") state.view = null;
 }
 function renderParts(filter) {
   const d = _partsData; if (!d) return;
@@ -817,8 +824,10 @@ function renderParts(filter) {
 
 // ---------- the page configured from the database repo ----------
 let _customLoaded = null;
-async function openCustom(page) {
+async function openCustom(page, push) {
   closeParts();
+  state.view = "custom";
+  if (push !== false) writeURL(true);
   const frame = $("#customFrame");
   if (_customLoaded !== page) {
     try {
@@ -840,18 +849,27 @@ function closeCustom() {
   $("#customView").hidden = true;
   $("#content").hidden = false;
   $("#customBtn").classList.remove("on");
+  if (state.view === "custom") state.view = null;
 }
 
 // ---------- main run ----------
 let _runSeq = 0;
 async function run(push) {
   const seq = ++_runSeq;
+  const wanted = state.view;
   closeParts();
   closeCustom();
   setMode();
   renderModeToggle();
+  // closing the panels above cleared state.view; put it back before the URL is
+  // written, or the address loses the page we are about to reopen
+  state.view = wanted;
   writeURL(push);
-  if (!hasQuery()) { $("#results").innerHTML = ""; $("#pager").innerHTML = ""; return; }
+  if (!hasQuery()) {
+    $("#results").innerHTML = ""; $("#pager").innerHTML = "";
+    restoreView(wanted);
+    return;
+  }
   const filters = {};
   for (const k in state.filters) filters[k] = Array.from(state.filters[k]);
   const m = await askWorker({
@@ -868,6 +886,17 @@ async function run(push) {
   state.facetData = { kinds: m.facets };
   renderActiveChips();
   renderFacets(state.facetData);
+  restoreView(wanted);
+}
+
+/* A reload or a Back gesture can land on ?view=..., so put that page back up. */
+function restoreView(wanted) {
+  if (wanted === "custom") {
+    const nav = (state.site && state.site.nav_button) || {};
+    if (nav.page) openCustom(nav.page, false);
+  } else if (wanted === "parts") {
+    openParts(false);
+  }
 }
 
 // ---------- blog (home) ----------
@@ -1013,6 +1042,7 @@ function applySite(site) {
     btn.textContent = nav.label || "More";
     btn.hidden = false;
     btn.onclick = () => openCustom(nav.page);
+    state.site = site;
   } else {
     btn.hidden = true;
   }
@@ -1033,7 +1063,19 @@ function applyFooter(f) {
     box.innerHTML = "";
     for (const l of f.links) {
       if (!l || !l.label) continue;
-      if (l.url && /^https?:/i.test(l.url)) {
+      const linked = l.url && /^https?:/i.test(l.url);
+      // "prefix" stays plain text so only the name itself is a link
+      if (l.prefix) {
+        const wrap = el("span", "footer-pair", l.prefix);
+        if (linked) {
+          const a = el("a", null, l.label);
+          a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+          wrap.appendChild(a);
+        } else {
+          wrap.appendChild(el("span", null, l.label));
+        }
+        box.appendChild(wrap);
+      } else if (linked) {
         const a = el("a", null, l.label);
         a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer";
         box.appendChild(a);
@@ -1045,8 +1087,12 @@ function applyFooter(f) {
 }
 
 async function loadRemoteContent(base) {
-  try { applySite(await fetchGz(base + "site.json", withTimeout(REMOTE_TIMEOUT))); }
-  catch (e) { /* built-in wording stays */ }
+  try {
+    const r = await fetch(base + "site.json", { signal: withTimeout(REMOTE_TIMEOUT), cache: "no-cache" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    showUpdated(r.headers.get("last-modified"));
+    applySite(await r.json());
+  } catch (e) { /* built-in wording stays */ }
   try {
     const d = await fetchGz(base + "posts.json", withTimeout(REMOTE_TIMEOUT));
     state.posts = Array.isArray(d) ? d : (d.posts || []);
@@ -1076,6 +1122,19 @@ async function loadConcept(base) {
       setMode();
     }
   } catch (e) { /* keyword only */ }
+}
+
+/* "Last updated" comes from the database repo's own Last-Modified header, so it
+   moves by itself whenever anything there is republished. */
+function showUpdated(httpDate) {
+  if (!httpDate) return;
+  const d = new Date(httpDate);
+  if (isNaN(d)) return;
+  const when = d.toLocaleString("en-GB", {
+    day: "numeric", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+  $("#footerUpdated").textContent = "Last updated: " + when;
 }
 
 function showNote(msg) {
@@ -1146,7 +1205,7 @@ function bindUI() {
   $("#searchBtn").onclick = go;
   $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   $("#brandHome").onclick = () => {
-    state.q = ""; state.filters = {}; state.page = 1;
+    state.q = ""; state.filters = {}; state.page = 1; state.view = null;
     $("#q").value = "";
     run(true);
   };
