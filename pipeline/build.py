@@ -124,6 +124,28 @@ def model_of(d, path):
     return re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
 
 
+# 2022 is when iGEM moved wikis to <year>.igem.wiki; everything older is still on
+# <year>.igem.org/Team:<Name>.
+WIKI_MOVE_YEAR = 2022
+
+
+def wiki_url(team, year, row):
+    """Where this team's wiki actually lives.
+
+    Derived, never taken from the summary. The model wrote a <year>.igem.wiki link
+    for every team, but that host only exists from 2022 - so every pre-2022 record
+    carried a dead link. The official team list gives the exact name the URL uses
+    (Lambert_GA in 2019, Lambert-GA in 2024).
+    """
+    name = ((row.get("name") if row else "") or team or "").strip()
+    if not name:
+        return ""
+    if year >= WIKI_MOVE_YEAR:
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        return "https://%d.igem.wiki/%s/" % (year, slug)
+    return "https://%d.igem.org/Team:%s" % (year, name.replace(" ", "_"))
+
+
 def identity_from_path(path):
     """Team and year come from the folder, never from the file.
 
@@ -179,7 +201,7 @@ def build_records(seen, td, qa):
             "id": "%s-%d" % (s, year),
             "t": name,
             "y": year,
-            "u": d.get("wiki_url") or "",
+            "u": wiki_url(name, year, row),
             "s": d.get("summary") or "",
             "p": d.get("problem_statement") or "",
             "a": d.get("approach_statement") or "",

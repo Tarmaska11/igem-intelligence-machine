@@ -474,6 +474,7 @@ function initWorkspace(pane) {
 //      wikis refuse to be framed, so Saved text is always one click away. ----
 function buildWikiView(container, t) {
   if (!t.u) { container.appendChild(el("div", "empty", "No wiki URL on record for this team.")); return; }
+  const embeddable = t.y >= WIKI_MOVE_YEAR;
   const bar = el("div", "wiki-bar");
   const modes = el("div", "wiki-modes");
   const liveBtn = el("button", "wiki-mode on", "Live wiki");
@@ -489,18 +490,22 @@ function buildWikiView(container, t) {
   function showLive() {
     liveBtn.classList.add("on"); textBtn.classList.remove("on");
     stage.innerHTML = "";
+    if (!embeddable) {
+      stage.appendChild(el("div", "wiki-note",
+        "Wikis from " + (WIKI_MOVE_YEAR - 1) + " and earlier refuse to be embedded " +
+        "(they send X-Frame-Options), so this frame would stay blank. Use Saved text " +
+        "below, or open the wiki in a new tab."));
+    }
     const frame = el("iframe", "wiki-frame");
     frame.src = t.u;
     frame.setAttribute("referrerpolicy", "no-referrer");
     stage.appendChild(frame);
-    stage.appendChild(el("div", "wiki-note",
-      "If the wiki stays blank it refuses to be embedded — use Saved text, or open it in a new tab."));
   }
   async function showText(auto) {
     textBtn.classList.add("on"); liveBtn.classList.remove("on");
     stage.innerHTML = "";
     stage.appendChild(el("div", "wiki-note", auto
-      ? "This wiki blocks live embedding, so here is the saved offline text."
+      ? "This wiki cannot be embedded, so here is the full text we saved from it."
       : "Saved offline wiki text from the corpus."));
     const body = el("div", "wiki-text"); body.textContent = "Loading saved text…";
     stage.appendChild(body);
@@ -508,7 +513,8 @@ function buildWikiView(container, t) {
   }
   liveBtn.onclick = showLive;
   textBtn.onclick = () => showText(false);
-  showLive();
+  // an old wiki cannot be framed, so go straight to the text we saved for it
+  if (embeddable) showLive(); else showText(true);
 }
 
 const _textCache = new Map();
@@ -524,6 +530,9 @@ async function wikiText(t) {
 // ---- Ask-AI pane: chat grounded in this project's wiki text ----
 // On the website there is no local CLI, so the browser talks to Gemini directly
 // with a key the visitor pastes. The key stays in their browser and nowhere else.
+// iGEM moved wikis to <year>.igem.wiki in 2022. The older ones on igem.org send
+// X-Frame-Options, so they can never be shown in a frame from another site.
+const WIKI_MOVE_YEAR = 2022;
 const GEM_KEY = "igem_gemini_api_key";
 const GEM_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
 const PRE2022_NOTE =
