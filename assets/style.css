@@ -1,3 +1,16 @@
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/playfair-display-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/playfair-display-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/playfair-display-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/playfair-display-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+/* Self-hosted so the page looks the same on every machine. Source Serif 4 and
+   Inter are both under the SIL Open Font License - see assets/fonts/OFL.txt */
+@font-face{font-family:'Source Serif 4';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/source-serif-4-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Source Serif 4';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/source-serif-4-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Source Serif 4';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/source-serif-4-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/inter-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/inter-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/inter-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+
 :root{
   /* ---- Scholarly Index: light, archival. Green is ink, not neon. ---- */
   --bg:#fafaf7;        /* soft near-white paper */
@@ -18,7 +31,7 @@
   --radius-lg:14px;    /* feature cards */
   --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
   --sans:"Inter",-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
-  --serif:"Source Serif 4","Spectral",Georgia,"Times New Roman",serif;
+  --serif:"Playfair Display","Source Serif 4",Georgia,"Times New Roman",serif;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}  /* ensure the hidden attr beats class display rules (.results-head/.pager are flex) */
@@ -594,4 +607,81 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .hero h1{font-size:28px}
   .hero-search #q,.hero-search #searchBtn{height:46px}
   .post-title{font-size:20px}
+}
+
+/* =====================================================================
+   Third pass. Proportions and fills taken by measuring the reference
+   image (1772px wide) rather than by eye:
+     content column   60.2% of the viewport, starting at 20%
+     search row       58.4%
+     page  #f6f6ef · card #f9f8f5 · field #fcfbf7 · button #06412b
+   ===================================================================== */
+:root{ --bg:#f6f6ef; }
+
+#content{max-width:1122px;padding:26px 28px 90px}
+.hero{max-width:none}
+.hero > p{max-width:730px}
+#heroSearch{max-width:1034px}
+
+.hero-search #q{background:#fcfbf7;border-color:#dcdad0}
+.hero-search #searchBtn{background:#06412b;border-color:#06412b}
+.hero-search #searchBtn:hover{background:#0a5537;border-color:#0a5537}
+
+.post-card{grid-template-columns:292px 1fr;background:#f9f8f5;border-color:#e3e1d7}
+.hero-stats .seg{background:#eff0e9;border-color:#e3e4dc}
+
+/* headline width to match the reference (50.1% of viewport), and a card with the
+   same vertical weight - its abstract wraps to two lines there, not one */
+.hero h1{font-size:52px}
+.post-thumb{min-height:250px}
+.post-body{padding:28px 34px 30px}
+.post-abstract{max-width:620px}
+
+/* The reference page has a plain ground, so the contour arcs go. One line to
+   bring back: change display to block. */
+.bg-contours{display:none}
+
+/* line breaks and the vertical rhythm, measured off the reference */
+.hero > p{max-width:775px;margin:0 0 34px}
+.blog{margin-top:58px}
+.blog-label{margin-bottom:13px}
+
+/* Playfair Display sits taller and narrower than Source Serif, so the headline
+   needs its own size to land on the reference's 50% of viewport width. */
+.hero h1{font-size:57px;line-height:1.1;letter-spacing:-.005em}
+.post-title{font-size:25px;line-height:1.22}
+.wordmark{font-size:17px}
+
+.hero h1{font-size:58px}
+
+/* break after "biological part," as the reference does */
+.hero > p{max-width:700px}
+
+.hero > p{font-size:19.5px;max-width:780px;line-height:1.58}
+
+.hero > p{font-size:18.5px;max-width:750px;line-height:1.58}
+
+.hero > p{max-width:900px}
+.wrap-wide{display:inline}
+@media(max-width:980px){.wrap-wide{display:none}}
+
+/* narrow screens, declared last so nothing above overrides them */
+@media(max-width:980px){
+  .post-card{grid-template-columns:1fr}
+  .post-thumb{min-height:170px;max-height:210px}
+  .post-abstract{max-width:none}
+  .hero > p{max-width:none;font-size:16.5px}
+  .hero h1{font-size:36px}
+  #heroSearch{max-width:none}
+}
+@media(max-width:560px){
+  .hero h1{font-size:29px}
+  .post-body{padding:20px}
+  .post-title{font-size:21px}
+}
+@media(max-width:560px){
+  .hero-search .searchwrap{gap:8px}
+  .hero-search #q{height:46px;font-size:16px;padding:0 12px 0 38px}
+  .hero-search .search-ic{left:12px}
+  .hero-search #searchBtn{height:46px;padding:0 16px;font-size:14px}
 }

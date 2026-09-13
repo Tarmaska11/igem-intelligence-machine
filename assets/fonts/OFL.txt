@@ -1,0 +1,13 @@
+The fonts in this folder are used under the SIL Open Font License, Version 1.1.
+
+  Source Serif 4 - Copyright 2014-2023 Adobe (https://adobe.com/), with Reserved
+  Font Name 'Source'. https://github.com/adobe-fonts/source-serif
+
+  Inter - Copyright 2016-2024 The Inter Project Authors
+  (https://github.com/rsms/inter)
+
+Both are licensed under the SIL Open Font License, Version 1.1, available at
+https://scripts.sil.org/OFL
+
+These files are the Latin subsets published by Google Fonts, stored here so the
+site does not depend on any third-party server at runtime.
