@@ -150,7 +150,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js?v=4383e6c0");
+  worker = new Worker("assets/search.worker.js?v=b72df6e0");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
@@ -409,7 +409,10 @@ function buildDetails(p, t) {
   p.appendChild(meta);
 
   const sect = (title, node) => { const s = el("div", "sect"); s.appendChild(el("h4", null, title)); s.appendChild(node); p.appendChild(s); };
-  const para = (txt) => el("p", null, txt);
+  const plain = (txt) => String(txt == null ? "" : txt)
+    .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1");
+  const para = (txt) => el("p", null, plain(txt));
 
   if (t.p) sect("Problem", para(t.p));
   if (t.a) sect("Approach", para(t.a));
@@ -448,7 +451,7 @@ function buildDetails(p, t) {
     });
     return w;
   };
-  const bullets = (arr, cls) => { const ul = el("ul"); arr.forEach((x) => { const li = el("li", cls); li.textContent = x; ul.appendChild(li); }); return ul; };
+  const bullets = (arr, cls) => { const ul = el("ul"); arr.forEach((x) => { const li = el("li", cls); li.textContent = plain(x); ul.appendChild(li); }); return ul; };
 
   if (t.target_molecules && t.target_molecules.length) {
     const w = el("div"); t.target_molecules.forEach((m) => w.appendChild(el("span", "mol", m))); sect("Target molecules", w);

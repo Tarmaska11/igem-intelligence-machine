@@ -297,7 +297,8 @@ function shardOf(term) {
 
 /* A short passage around the first query word, like the old server snippet. */
 function snippet(text, words) {
-  const t = (text || "").replace(/\s+/g, " ").trim();
+  const t = (text || "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1").replace(/\s+/g, " ").trim();
   if (!t) return "";
   const low = t.toLowerCase();
   let at = -1;

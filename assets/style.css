@@ -931,3 +931,20 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .ai-send{font-family:var(--sans);font-weight:600;border-radius:6px;background:#1e5d43;
   border-color:#1e5d43}
 .ai-key{font-family:var(--sans);border-radius:6px}
+
+/* --- facet lists: stop cutting a row in half, and show the scroll is there --- */
+.facet-group{background:transparent;border-color:#e3e1d7}
+.facet-list{max-height:252px;padding:6px 10px 10px;
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent 100%)}
+.facet-list::-webkit-scrollbar{width:5px}
+.facet-list::-webkit-scrollbar-thumb{background:#d8d6cb;border-radius:3px}
+.facet-item{padding:5px 2px}
+
+/* --- project meta reads as one line of separated facts --- */
+.dmeta > *:not(:first-child)::before{content:"·";color:var(--ink-faint);margin-right:16px}
+
+/* --- footer bottom: legal left, stamp right --- */
+.footer-bottom{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 28px}
+.footer-legal{margin:0;flex:1 1 380px}
+.footer-stamp{display:flex;gap:18px;align-items:baseline;margin:0}
