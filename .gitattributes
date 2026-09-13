@@ -2,3 +2,6 @@
 *.gz binary
 *.jpg binary
 *.png binary
+*.woff2 binary
+*.woff binary
+*.ico binary
