@@ -605,12 +605,15 @@ function initAiPane(pane) {
   log.appendChild(el("div", "ai-hint",
     "Answers come only from this project's stored wiki text. The request goes straight " +
     "from your browser to Google with your own key."));
-  if (t.y && t.y < 2022) addMsg(log, "ai", PRE2022_NOTE);
+  if (t.y && t.y < 2022) {
+    const n = el("div", "ai-layout-note", PRE2022_NOTE);
+    log.parentNode.insertBefore(n, log);
+  }
   pane.appendChild(log);
 
   const form = el("div", "ai-form");
   const ta = el("textarea", "ai-q");
-  ta.placeholder = "Ask about this project…  e.g.  What chassis did they use?  What were the key results?  What failed?";
+  ta.placeholder = "Ask about this project - what chassis, what results, what failed?";
   ta.rows = 2;
   const send = el("button", "ai-send", "Ask");
   form.append(ta, send);

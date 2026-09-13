@@ -948,3 +948,7 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .footer-bottom{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 28px}
 .footer-legal{margin:0;flex:1 1 380px}
 .footer-stamp{display:flex;gap:18px;align-items:baseline;margin:0}
+
+/* the pre-2022 layout warning is a note, not an answer from the model */
+.ai-layout-note{font-family:var(--sans);font-size:12.5px;line-height:1.55;color:var(--ink-dim);
+  padding:9px 12px;margin:0 0 10px;border:1px solid #e3e1d7;border-radius:8px;background:#f2f1ea}
