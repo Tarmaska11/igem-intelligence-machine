@@ -1,12 +1,22 @@
 # -*- coding: utf-8 -*-
 """Build the concept-search model and write it in a form the browser can read.
 
-Same LSA as the local version: TF-IDF over the corpus, reduced to 200 latent
-dimensions through the small Gram matrix. The result is quantised to int8 so it
-can ship with the site instead of sitting in a 34 MB .npy.
+Same idea as the local version: TF-IDF over the corpus, reduced to 200 latent
+dimensions, then quantised to int8 so it can ship with the site.
+
+Written to stay small in memory, because this corpus is 600 MB of text and the
+machine that builds it is not a server:
+
+  pass 1  stream every document, keep only document frequencies
+  pass 2  stream them again, writing straight into sparse arrays
+  then    a truncated SVD, so the 4978 x 4978 Gram matrix is never formed
+
+Nothing per-document is retained between passes. BLAS is held to two threads and
+the loops rest briefly so the CPU is not pinned for the whole run.
 
     python pipeline/lsa.py
 """
+import array
 import base64
 import gzip
 import json
@@ -14,8 +24,16 @@ import math
 import os
 import re
 import sys
+import time
+
+# keep BLAS off every core - must happen before numpy is imported
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(_v, "2")
 
 import numpy as np
+import scipy.sparse as sp
+from scipy.sparse.linalg import svds
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.dirname(HERE)
@@ -42,11 +60,14 @@ biosensor pathway metabolic synthetic bacteriophage phage antibiotic
 
 _TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9\-]+")
 
-MAX_VOCAB = 16000        # smaller than the desktop build so the matrix fits in RAM
+MAX_VOCAB = 14000
 MIN_DF = 3
 MAX_DF_RATIO = 0.85
 MAX_TOKENS_PER_DOC = 60000
 N_COMPONENTS = 200
+
+REST_EVERY = 250
+REST_SECONDS = 0.3
 
 
 def tokenize(text):
@@ -62,48 +83,59 @@ def tokenize(text):
 
 
 def doc_text(rec, wiki):
-    bits = [rec.get("s"), rec.get("p"), rec.get("a"), rec.get("n"), rec.get("track"),
-            rec.get("application_domain")]
+    bits = [rec.get("s"), rec.get("p"), rec.get("a"), rec.get("n"),
+            rec.get("track"), rec.get("application_domain")]
     bits += rec.get("kr") or []
     bits += rec.get("fm") or []
     bits += B.all_names(rec)
-    body = " ".join(x for x in bits if x)
-    return body + " " + (wiki or "")[:400000]
+    return " ".join(x for x in bits if x) + " " + (wiki or "")[:400000]
+
+
+def read_doc(rec, paths):
+    wiki = ""
+    p = paths.get(rec["id"])
+    if p:
+        try:
+            wiki = open(p, encoding="utf-8", errors="ignore").read()
+        except Exception:
+            wiki = ""
+    return tokenize(doc_text(rec, wiki))[:MAX_TOKENS_PER_DOC]
+
+
+def counts_of(toks):
+    c = {}
+    for t in toks:
+        c[t] = c.get(t, 0) + 1
+    return c
 
 
 def quantise(mat):
-    """int8 with one scale for the whole matrix - good enough for cosine ranking."""
+    """int8 with one scale - plenty for ranking by cosine."""
     peak = float(np.abs(mat).max()) or 1.0
     scale = peak / 127.0
     return np.clip(np.round(mat / scale), -127, 127).astype(np.int8), scale
 
 
 def main():
+    t0 = time.time()
     td = B.TeamDirectory(os.path.join(B.SRC, B.CONF["teams_csv"]))
-    qa = B.load_qa()
-    records, _ = B.build_records(B.load_records(), td, qa)
+    records, _ = B.build_records(B.load_records(), td, B.load_qa())
+    limit = int(os.environ.get("LSA_LIMIT", "0"))
+    if limit:
+        records = records[:limit]       # used to measure memory before a full run
     paths = B.wiki_paths()
     n = len(records)
-    print("records: %d" % n)
+    print("records: %d" % n, flush=True)
 
-    doc_counts, df = [], {}
+    # ---- pass 1: document frequencies only ----
+    df = {}
     for i, r in enumerate(records):
-        wiki = ""
-        p = paths.get(r["id"])
-        if p:
-            try:
-                wiki = open(p, encoding="utf-8", errors="ignore").read()
-            except Exception:
-                wiki = ""
-        toks = tokenize(doc_text(r, wiki))[:MAX_TOKENS_PER_DOC]
-        counts = {}
-        for t in toks:
-            counts[t] = counts.get(t, 0) + 1
-        doc_counts.append(counts)
-        for t in counts:
+        for t in set(read_doc(r, paths)):
             df[t] = df.get(t, 0) + 1
-        if i % 500 == 0:
-            print("  tokenised %d/%d" % (i, n), flush=True)
+        if (i + 1) % REST_EVERY == 0:
+            time.sleep(REST_SECONDS)
+            if (i + 1) % 1000 == 0:
+                print("   pass1 %d/%d" % (i + 1, n), flush=True)
 
     ceiling = max(MIN_DF, int(MAX_DF_RATIO * n))
     cand = [(t, d) for t, d in df.items()
@@ -112,35 +144,49 @@ def main():
     vocab = sorted(t for t, _ in cand[:MAX_VOCAB])
     vidx = {t: i for i, t in enumerate(vocab)}
     v = len(vocab)
-    print("vocab: %d" % v)
-
     idf = np.empty(v, dtype=np.float32)
     for t, i in vidx.items():
         idf[i] = math.log((n + 1.0) / (df[t] + 1.0)) + 1.0
+    del df, cand
+    print("vocab: %d (of the full term set)" % v, flush=True)
 
-    x = np.zeros((n, v), dtype=np.float32)
-    for r, counts in enumerate(doc_counts):
-        for t, c in counts.items():
+    # ---- pass 2: straight into sparse triplets ----
+    rows = array.array("i")
+    cols = array.array("i")
+    vals = array.array("f")
+    for i, r in enumerate(records):
+        for t, k in counts_of(read_doc(r, paths)).items():
             j = vidx.get(t)
             if j is not None:
-                x[r, j] = (1.0 + math.log(c)) * idf[j]
-    norms = np.linalg.norm(x, axis=1)
-    norms[norms == 0.0] = 1.0
-    x /= norms[:, None]
-    print("tf-idf matrix: %.0f MB" % (x.nbytes / 1e6))
+                rows.append(i)
+                cols.append(j)
+                vals.append((1.0 + math.log(k)) * float(idf[j]))
+        if (i + 1) % REST_EVERY == 0:
+            time.sleep(REST_SECONDS)
+            if (i + 1) % 1000 == 0:
+                print("   pass2 %d/%d  (%d nonzeros)" % (i + 1, n, len(rows)), flush=True)
 
-    k = int(min(N_COMPONENTS, n - 1, v))
-    g = (x @ x.T).astype(np.float64)
-    evals, evecs = np.linalg.eigh(g)
-    order = np.argsort(evals)[::-1][:k]
-    sk = np.sqrt(np.clip(evals[order], 0.0, None))
-    uk = evecs[:, order]
-    safe = np.where(sk > 1e-9, sk, 1.0)
-    comp = (x.T.astype(np.float64) @ uk) / safe[None, :]      # V x k
-    docs = uk * sk[None, :]                                   # N x k
+    x = sp.csr_matrix((np.frombuffer(vals, dtype=np.float32),
+                       (np.frombuffer(rows, dtype=np.int32),
+                        np.frombuffer(cols, dtype=np.int32))),
+                      shape=(n, v), dtype=np.float32)
+    del rows, cols, vals
+    norms = np.sqrt(x.multiply(x).sum(axis=1)).A.ravel()
+    norms[norms == 0.0] = 1.0
+    x = (sp.diags(1.0 / norms) @ x).astype(np.float32)
+    print("tf-idf: %d nonzeros, %.0f MB" % (x.nnz, x.data.nbytes / 1e6), flush=True)
+
+    k = int(min(N_COMPONENTS, min(n, v) - 1))
+    print("truncated SVD, k=%d ..." % k, flush=True)
+    u, s, vt = svds(x, k=k)
+    order = np.argsort(s)[::-1]
+    s, u = s[order], u[:, order]
+    comp = vt[order, :].T                      # V x k, projects a query into the space
+    docs = u * s[None, :]                      # N x k
     dn = np.linalg.norm(docs, axis=1)
     dn[dn == 0.0] = 1.0
-    docs /= dn[:, None]
+    docs = docs / dn[:, None]
+    print("svd done, top singular value %.3f" % s[0], flush=True)
 
     qc, cs = quantise(comp.astype(np.float32))
     qd, ds = quantise(docs.astype(np.float32))
@@ -152,12 +198,14 @@ def main():
         "comp_scale": cs, "comp": base64.b64encode(qc.tobytes()).decode("ascii"),
         "docs_scale": ds, "docs": base64.b64encode(qd.tobytes()).decode("ascii"),
     }
+    blob = json.dumps(out, separators=(",", ":")).encode("utf-8")
     for target in (os.path.join(SITE, "baseline"), os.path.join(SITE, "dist-data")):
         p = os.path.join(target, "lsa.json.gz")
-        blob = json.dumps(out, separators=(",", ":")).encode("utf-8")
         with gzip.GzipFile(p, "wb", 9, mtime=0) as fh:
             fh.write(blob)
-        print("%s: raw %.1f MB  gz %.1f MB" % (p, len(blob) / 1e6, os.path.getsize(p) / 1e6))
+        print("%s  raw %.1f MB  gz %.1f MB"
+              % (os.path.relpath(p, SITE), len(blob) / 1e6, os.path.getsize(p) / 1e6))
+    print("done in %.0fs" % (time.time() - t0))
 
 
 if __name__ == "__main__":

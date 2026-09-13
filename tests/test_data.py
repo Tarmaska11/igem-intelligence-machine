@@ -66,6 +66,12 @@ def main():
     check("records keep importance tags",
           all("importance" in x for r in records for x in (r.get("chassis_organisms") or [])[:1]))
 
+    matched = sum(1 for r in records if r.get("mt"))
+    rate = 100.0 * matched / n
+    check("official metadata joined for >=95%% of records (%.1f%%)" % rate, rate >= 95)
+    unmatched = [r["t"] for r in records if not r.get("mt")]
+    check("few unmatched team names left", len(unmatched) < 150, len(unmatched))
+
     print("\nparts")
     parts = load("parts")
     check("parts index built", parts["total_unique"] > 1000, parts["total_unique"])

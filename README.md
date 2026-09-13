@@ -1,6 +1,6 @@
 # iGEM Intelligence Machine
 
-A search engine over every iGEM team project from **2008 to 2025** — 5 094 team-years.
+A search engine over every iGEM team project from **2008 to 2025** — 5 066 team-years.
 Search by idea, chassis organism, molecular technique, biological part, target molecule,
 result, or failure, and find the teams who already tried what you are about to try.
 
@@ -35,10 +35,11 @@ Any static file server works, because the site is just files:
 ```
 git clone https://github.com/Tarmaska11/igem-intelligence-machine.git
 cd igem-intelligence-machine
-python -m http.server 8899
+python run.py          # or run.bat on Windows
 ```
 
-Then open <http://127.0.0.1:8899/>. No dependencies, no build step, no network needed —
+That serves the folder and opens <http://127.0.0.1:8899/>. Any static file server works just
+as well (`python -m http.server 8899`). No dependencies, no build step, no network needed —
 the bundled archive in `baseline/` is the complete 2008-2025 dataset.
 
 ## Rebuilding the data
@@ -47,26 +48,32 @@ The website ships with prebuilt data. To build it again from the sources:
 
 ```
 python pipeline/build.py             # the search bundles
-python pipeline/build.py --fulltext  # also the wiki-text index (slow, ~10 min)
+python pipeline/build.py --fulltext  # also the wiki-text index (slow, ~15 min)
+python pipeline/lsa.py               # the concept-search model (needs numpy+scipy)
 ```
 
 `pipeline/sources.json` says where the source summaries, the official iGEM team CSVs and
 the scraped wiki text live. The build is deterministic: the same inputs give byte-identical
 output, and every file is listed with its SHA-256 in `manifest.json`.
 
-Python 3.9+, standard library only — `requirements.txt` is empty on purpose.
+Building the bundles needs **only the Python standard library** (3.9+).
+The optional concept-search model (`pipeline/lsa.py`) needs numpy and scipy —
+both pinned in `requirements.txt`.
 
 ## How it is put together
 
 ```
+run.py / run.bat            serve the folder and open a browser
 index.html                  the page
 assets/app.js               UI, routing, loading, fallback
 assets/search.worker.js     BM25 search, runs off the main thread
 assets/style.css
-baseline/                   the 2008-2025 archive, gzipped JSON (8.7 MB)
+baseline/                   the 2008-2025 archive, gzipped JSON
 pipeline/build.py           builds everything in baseline/
 pipeline/canon.py           tidies the messy facet values into real filters
 pipeline/teams_meta.py      joins the official iGEM team metadata
+pipeline/lsa.py             builds the concept-search model
+tests/                      data checks + a browser smoke test
 ```
 
 **Search.** Every project's summary, structured fields and team name go into one inverted

@@ -124,6 +124,22 @@ def model_of(d, path):
     return re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
 
 
+def identity_from_path(path):
+    """Team and year come from the folder, never from the file.
+
+    The summaries were written by a model reading the wiki, and it sometimes put
+    the project name or the wrong year in those fields - "Cyanolux SpiderColi"
+    for UC_Chile, year 2023 for Valencia_UPV/2017. Every summary lives at
+    <Team>/<Year>/metadata_<model>.json, so the path is the reliable answer.
+    """
+    year_dir = os.path.basename(os.path.dirname(path))
+    team_dir = os.path.basename(os.path.dirname(os.path.dirname(path)))
+    try:
+        return team_dir, int(year_dir)
+    except (TypeError, ValueError):
+        return team_dir, None
+
+
 def load_records():
     seen = {}
     for entry in CONF["summaries"]:
@@ -133,16 +149,20 @@ def load_records():
                 d = json.load(open(path, encoding="utf-8"))
             except Exception:
                 continue
-            try:
-                year = int(d.get("year"))
-            except (TypeError, ValueError):
-                continue
+            team, year = identity_from_path(path)
+            if year is None:
+                try:
+                    year = int(d.get("year"))
+                except (TypeError, ValueError):
+                    continue
             if not (MIN_YEAR <= year <= MAX_YEAR):
                 continue
-            key = (slug(d.get("team_name")), year)
+            key = (slug(team), year)
             if not key[0]:
                 continue
             d["_src_path"] = path
+            d["_team"] = team
+            d["_year"] = year
             seen.setdefault(key, d)
     return seen
 
@@ -150,7 +170,7 @@ def load_records():
 def build_records(seen, td, qa):
     out, dropped = [], collections.Counter()
     for (s, year), d in sorted(seen.items()):
-        name = (d.get("team_name") or "").strip()
+        name = (d.get("_team") or d.get("team_name") or "").strip()
         if s in NOT_TEAMS or JUNK_NAME.search(name):
             dropped["not-a-team"] += 1
             continue
@@ -198,7 +218,7 @@ def build_records(seen, td, qa):
                               ("country", "country"), ("section", "section")):
                 v = (row.get(col) or "").strip()
                 if v:
-                    facets[kind] = [v]
+                    facets[kind] = [canon.label_meta(kind, v)]
             rec["city"] = row.get("city") or ""
         facets["year"] = [str(year)]
         if rec["fm"]:
@@ -401,8 +421,10 @@ def main():
             print("   %-9s raw %7.1f MB   gz %6.2f MB" % (name, raw / 1e6, gz / 1e6))
         print("   %-9s %20s gz %6.2f MB" % ("TOTAL", "", total / 1e6))
 
+        # records is part of the contract: the wiki shards and the concept model are
+        # addressed by record position, so a consumer must refuse a mismatch
         man = {"schema": DATA_SCHEMA, "version": meta["built_at"],
-               "generated_at": meta["built_at"], "files": {}}
+               "generated_at": meta["built_at"], "records": len(records), "files": {}}
         for name in ("cards", "records", "index", "facets", "parts", "meta"):
             rel = name + ".json.gz"
             man["files"][name] = {"path": rel, "sha": sha(os.path.join(target, rel)),
@@ -441,10 +463,17 @@ def wiki_paths():
 
 
 def build_fulltext(records):
-    """Sharded inverted index over the raw wiki text, plus the text itself."""
+    """Sharded inverted index over the raw wiki text, plus the text itself.
+
+    Postings are spooled to one temporary file per shard and merged at the end.
+    Holding all ~14 million of them in memory needed well over a gigabyte, which
+    is more than this machine can spare.
+    """
     out = os.path.join(DIST, "fulltext")
+    tmp = os.path.join(out, "_tmp")
     os.makedirs(os.path.join(out, "text"), exist_ok=True)
-    print("\n[fulltext] scanning wiki text ...")
+    os.makedirs(tmp, exist_ok=True)
+    print("\n[fulltext] scanning wiki text ...", flush=True)
 
     index = wiki_paths()
     df = collections.Counter()
@@ -458,36 +487,50 @@ def build_fulltext(records):
         if i % 500 == 0:
             print("   pass1 %d/%d" % (i, len(records)), flush=True)
     keep = {t for t, c in df.items() if c >= MIN_DF}
-    print("[fulltext] %d docs, %d terms kept (of %d)" % (len(paths), len(keep), len(df)))
+    print("[fulltext] %d docs, %d terms kept (of %d)" % (len(paths), len(keep), len(df)), flush=True)
+    del df
 
-    shards = collections.defaultdict(lambda: collections.defaultdict(list))
+    spool = [open(os.path.join(tmp, "%03d.txt" % s), "w", encoding="utf-8") for s in range(NSHARD)]
     for n, (i, p) in enumerate(sorted(paths.items())):
         text = open(p, encoding="utf-8", errors="ignore").read()
         tf = collections.Counter(tokens(text))
         for t, c in tf.items():
             if t in keep:
-                s = shard_of(t)
-                shards[s][t].append((i, min(c, 255)))
+                spool[shard_of(t)].write("%s\t%d\t%d\n" % (t, i, min(c, 255)))
         gzp = os.path.join(out, "text", records[i]["id"] + ".txt.gz")
         with gzip.GzipFile(gzp, "wb", 9, mtime=0) as fh:
             fh.write(text.encode("utf-8"))
         if n % 500 == 0:
+            for f in spool:
+                f.flush()
             print("   pass2 %d/%d" % (n, len(paths)), flush=True)
+    for f in spool:
+        f.close()
+    del keep
 
     total = 0
-    for s, terms in shards.items():
+    for s in range(NSHARD):
+        path = os.path.join(tmp, "%03d.txt" % s)
+        postings = collections.defaultdict(list)
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                t, did, c = line.rstrip("\n").split("\t")
+                postings[t].append((int(did), int(c)))
         obj = {}
-        for t, plist in terms.items():
+        for t, plist in postings.items():
             ids, cs, prev = [], [], 0
             for did, c in sorted(plist):
                 ids.append(did - prev)
                 prev = did
                 cs.append(c)
             obj[t] = [ids, cs]
-        p = os.path.join(out, "index", "%03d.json.gz" % s)
-        _, gz = write_gz(p, obj)
+        _, gz = write_gz(os.path.join(out, "index", "%03d.json.gz" % s), obj)
         total += gz
-    print("[fulltext] %d shards, %.1f MB gz" % (len(shards), total / 1e6))
+        os.remove(path)
+        if s % 64 == 0:
+            print("   merged shard %d/%d" % (s, NSHARD), flush=True)
+    os.rmdir(tmp)
+    print("[fulltext] %d shards, %.1f MB gz" % (NSHARD, total / 1e6), flush=True)
 
 
 if __name__ == "__main__":

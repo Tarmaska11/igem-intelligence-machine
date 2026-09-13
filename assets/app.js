@@ -47,6 +47,7 @@ const state = {
   page: 1,
   facetData: {},
   semantic: false,      // whether the LSA model loaded
+  wantedMode: DEFAULT_MODE,   // mode asked for in the URL, applied once it can be
   lastRes: null,
   labels: {},           // kind -> {key: display label}
   base: "baseline/",    // where wiki text and the LSA model come from
@@ -60,6 +61,7 @@ const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) 
 
 // ---------- data layer ----------
 let worker = null;
+let _lsaModel = null;   // kept so a worker restart can reload it
 let _records = null;
 let _partsData = null;
 
@@ -157,6 +159,8 @@ function startWorker(data) {
     type: "load", cards: data.cards, index: data.index, facets: data.facets,
     fulltextBases: state.fulltextBases,
   });
+  // a fresh worker starts without the concept model, so hand it back
+  if (_lsaModel) worker.postMessage({ seq: 0, type: "lsa", model: _lsaModel });
   state.meta = data.meta;
 }
 
@@ -166,8 +170,9 @@ function readURL() {
   state.q = p.get("q") || "";
   state.page = parseInt(p.get("page") || "1", 10) || 1;
   const m = p.get("mode");
-  state.mode = MODES.some(([id]) => id === m) ? m : DEFAULT_MODE;
-  if (!state.semantic) state.mode = "lexical";
+  const wanted = MODES.some(([id]) => id === m) ? m : DEFAULT_MODE;
+  state.wantedMode = wanted;
+  state.mode = state.semantic ? wanted : "lexical";
   state.filters = {};
   for (const [k] of FACET_KINDS) {
     const vals = p.getAll(k);
@@ -1012,11 +1017,18 @@ async function loadConcept(base) {
   if (state.semantic) return;
   try {
     const model = await fetchGz(base + "lsa.json.gz");
+    // the model is a row per record, in order, so a stale one must be ignored
+    const n = (state.meta && state.meta.record_count) || 0;
+    if (model.n !== n) return;
     const ok = await askWorker({ type: "lsa", model });
     if (ok && ok.ok) {
+      _lsaModel = model;
       state.semantic = true;
-      const p = new URLSearchParams(location.search).get("mode");
-      if (MODES.some(([id]) => id === p)) state.mode = p;
+      // a shared ?mode=hybrid link asked for concept search before we could offer it
+      if (state.wantedMode && state.wantedMode !== state.mode) {
+        state.mode = state.wantedMode;
+        if (hasQuery()) { run(false); return; }
+      }
       renderModeToggle();
       setMode();
     }
@@ -1060,8 +1072,14 @@ async function boot() {
     return;
   }
   state.base = remote.base;
-  state.fulltextBases = DATA_ORIGINS;
   const changed = changedBundles(localManifest, remote.manifest);
+  // the wiki shards are addressed by record position, so only trust them when the
+  // repo was built for the same record set we are actually searching
+  const remoteRecords = remote.manifest.records;
+  const localRecords = (data.meta && data.meta.record_count) || 0;
+  if (changed.length || remoteRecords === localRecords) {
+    state.fulltextBases = DATA_ORIGINS;
+  }
   if (changed.length) {
     try {
       const fresh = await loadBundles(remote.base, changed);
@@ -1071,7 +1089,7 @@ async function boot() {
       await run(false);
     } catch (e) { /* keep the baseline */ }
   }
-  if (!changed.length) {
+  if (!changed.length && state.fulltextBases) {
     worker.postMessage({ type: "fulltext", bases: state.fulltextBases });
   }
   loadRemoteContent(remote.base);

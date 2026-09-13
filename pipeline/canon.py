@@ -200,6 +200,46 @@ PART = [
     ("Registry part (BBa_)",     r"^bba[ _-]?[a-z]?\d+"),
 ]
 
+# The team CSVs give regions as slugs and countries as ISO-3 codes. These are the
+# 67 countries that actually appear, spelled the way a reader expects.
+REGION_LABEL = {
+    "asia": "Asia", "north-america": "North America", "europe": "Europe",
+    "latin-america": "Latin America", "oceania": "Oceania", "africa": "Africa",
+}
+SECTION_LABEL = {
+    "undergrad": "Undergraduate", "overgrad": "Overgraduate", "high-school": "High school",
+}
+COUNTRY_LABEL = {
+    "ARE": "United Arab Emirates", "ARG": "Argentina", "AUS": "Australia", "AUT": "Austria",
+    "BEL": "Belgium", "BGR": "Bulgaria", "BOL": "Bolivia", "BRA": "Brazil", "CAN": "Canada",
+    "CHE": "Switzerland", "CHL": "Chile", "CHN": "China", "COD": "DR Congo", "COL": "Colombia",
+    "CRI": "Costa Rica", "CZE": "Czechia", "DEU": "Germany", "DNK": "Denmark", "ECU": "Ecuador",
+    "EGY": "Egypt", "ESP": "Spain", "EST": "Estonia", "FIN": "Finland", "FRA": "France",
+    "GBR": "United Kingdom", "GHA": "Ghana", "GRC": "Greece", "HKG": "Hong Kong",
+    "HND": "Honduras", "HUN": "Hungary", "IDN": "Indonesia", "IND": "India", "IRL": "Ireland",
+    "ISR": "Israel", "ITA": "Italy", "JPN": "Japan", "KAZ": "Kazakhstan", "KEN": "Kenya",
+    "KOR": "South Korea", "KWT": "Kuwait", "LTU": "Lithuania", "LVA": "Latvia", "MAC": "Macau",
+    "MEX": "Mexico", "NLD": "Netherlands", "NOR": "Norway", "NPL": "Nepal",
+    "NZL": "New Zealand", "PAK": "Pakistan", "PAN": "Panama", "PER": "Peru", "POL": "Poland",
+    "PRI": "Puerto Rico", "PRT": "Portugal", "QAT": "Qatar", "ROU": "Romania",
+    "RUS": "Russia", "SAU": "Saudi Arabia", "SGP": "Singapore", "SVN": "Slovenia",
+    "SWE": "Sweden", "THA": "Thailand", "TUR": "Turkey", "TWN": "Taiwan", "UGA": "Uganda",
+    "USA": "United States", "ZAF": "South Africa",
+}
+
+
+def label_meta(kind, value):
+    """Display label for a value that came straight from the iGEM team CSVs."""
+    v = (value or "").strip()
+    if kind == "region":
+        return REGION_LABEL.get(v.lower(), v.replace("-", " ").title())
+    if kind == "section":
+        return SECTION_LABEL.get(v.lower(), v.replace("-", " ").capitalize())
+    if kind == "country":
+        return COUNTRY_LABEL.get(v.upper(), v)
+    return v
+
+
 RULES = {"domain": DOMAIN, "technique": TECHNIQUE, "chassis": CHASSIS,
          "molecule": MOLECULE, "part": PART}
 _COMPILED = {k: [(label, re.compile(pat)) for label, pat in v] for k, v in RULES.items()}
