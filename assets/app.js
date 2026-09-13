@@ -712,7 +712,12 @@ async function streamChat(t, question, model, apiKey, history, ansEl, log) {
   return acc;
 }
 
-function closeDrawer() { $("#drawer").hidden = true; }
+function closeDrawer() {
+  $("#drawer").hidden = true;
+  // an embedded team wiki keeps loading and running its own scripts otherwise
+  const f = $("#drawerPanel").querySelector("iframe.wiki-frame");
+  if (f) f.src = "about:blank";
+}
 
 // ---------- resizable drawer (drag the left-edge handle; width persisted) ----------
 const DW_KEY = "igem_drawer_width";
@@ -987,23 +992,20 @@ function applyMeta(meta) {
     n(d.technique) + " techniques", n(d.part) + " parts",
   ];
   $("#stats").textContent = segs.join(" · ");
+  paintStats(segs);
+}
+
+/* each figure gets its own pill, so the row stays readable at any width */
+function paintStats(segs) {
   const hs = $("#heroStats");
   hs.innerHTML = "";
-  segs.forEach((s, i) => {
-    if (i) hs.appendChild(el("span", "dot", "·"));
-    hs.appendChild(el("span", "seg", s));
-  });
+  segs.forEach((s) => hs.appendChild(el("span", "seg", String(s))));
 }
 
 function applySite(site) {
   if (site.hero && site.hero.year_range) $("#heroYears").textContent = site.hero.year_range;
   if (site.stats && Array.isArray(site.stats.segments) && site.stats.segments.length) {
-    const hs = $("#heroStats");
-    hs.innerHTML = "";
-    site.stats.segments.forEach((s, i) => {
-      if (i) hs.appendChild(el("span", "dot", "·"));
-      hs.appendChild(el("span", "seg", String(s)));
-    });
+    paintStats(site.stats.segments);
   }
   const nav = site.nav_button || {};
   const btn = $("#customBtn");

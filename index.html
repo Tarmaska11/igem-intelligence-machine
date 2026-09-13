@@ -41,7 +41,7 @@
     <div id="hero" class="hero">
       <h1>A search over every <span class="hl-k">iGEM</span> project.</h1>
       <p>Find prior teams by idea, chassis organism, molecular technique, biological
-         part, target molecule, result, or failure - across <span class="hl-k" id="heroYears">2008-2025</span>.
+         part, target molecule, result, or failure &mdash; across <b id="heroYears">2008-2025</b>.
          Made with love for future iGEMers! ;3</p>
       <div id="heroSearch" class="hero-search">
         <div class="searchwrap">
@@ -51,8 +51,12 @@
         </div>
       </div>
       <!-- stats sit outside #blog so they still show when there are no posts -->
-      <div id="heroStats" class="hero-stats"></div>
+      <div class="stats-row">
+        <span class="stats-label">Statistics:</span>
+        <div id="heroStats" class="hero-stats"></div>
+      </div>
       <section id="blog" class="blog" hidden>
+        <div class="blog-label">Featured article</div>
         <div id="blogList" class="blog-list"></div>
         <div id="blogMore" class="blog-more"></div>
       </section>

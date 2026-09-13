@@ -457,3 +457,97 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .card-top{flex-wrap:wrap}
   .tagrow{min-width:0}
 }
+
+/* =====================================================================
+   Home layout, matched to the reference: one left-aligned column,
+   a larger serif headline, and figures shown as small pills.
+   ===================================================================== */
+:root{ --bg:#f4f4ef; --line:#e4e3db; --line-strong:#d0cfc4; }
+
+.bg-contours{opacity:.35}            /* was competing with the content */
+
+.hero{max-width:1100px;margin:0;padding:76px 0 26px;text-align:left}
+#content{padding:26px 28px 90px;max-width:1180px;margin:0 auto}
+
+.hero h1{font-family:var(--serif);font-size:58px;line-height:1.06;font-weight:700;
+  letter-spacing:-.015em;color:#141814;margin:0 0 20px;white-space:normal}
+.hero h1 .hl-k{color:inherit}
+.hero > p{font-family:var(--sans);font-size:19px;line-height:1.62;color:#4c5158;
+  max-width:820px;margin:0 0 30px;text-align:left}
+.hero > p b, .hero > p .hl-k{font-weight:600;color:var(--ink)}
+
+/* search: one row, button kept as its own control */
+.hero-search{max-width:1040px}
+.hero-search .searchwrap{gap:12px}
+.hero-search #q{height:58px;padding:0 18px 0 48px;font-size:16.5px;border-radius:6px;
+  border:1px solid var(--line-strong);background:#fff}
+.hero-search .search-ic{left:17px}
+.hero-search #searchBtn{height:58px;padding:0 34px;border-radius:6px;font-size:16px;
+  font-weight:600;background:var(--accent-strong);border-color:var(--accent-strong)}
+
+/* figures, as pills under the search box */
+.stats-row{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:18px 0 0}
+.stats-label{font-family:var(--sans);font-size:13.5px;color:var(--ink-dim);margin-right:2px}
+.hero-stats{display:flex;flex-wrap:wrap;gap:9px;text-align:left}
+.hero-stats .seg{font-family:var(--sans);font-size:12.5px;line-height:1;color:#4a5a4f;
+  background:#e9ece4;border:1px solid #dfe3d8;border-radius:999px;padding:7px 13px;
+  white-space:nowrap;letter-spacing:0}
+
+/* section label above the article */
+.blog{margin-top:58px}
+.blog-label{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);padding-bottom:8px;margin-bottom:20px;
+  border-bottom:2px solid var(--accent);display:inline-block}
+
+/* the article card */
+.blog-list{display:block}
+.post-card{display:grid;grid-template-columns:292px 1fr;gap:0;align-items:stretch;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  overflow:hidden;box-shadow:none;transition:border-color .15s}
+.post-card:hover{border-color:var(--line-strong)}
+.post-thumb{width:100%;height:100%;min-height:224px;object-fit:cover;border-radius:0;display:block}
+.post-body{padding:26px 32px 28px}
+.post-meta{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:10px;display:flex;gap:8px;align-items:center}
+.post-title{font-family:var(--serif);font-size:27px;line-height:1.2;font-weight:700;
+  color:#141814;margin:0 0 10px}
+.post-abstract{font-family:var(--sans);font-size:16px;line-height:1.62;color:#4c5158;margin:0 0 16px}
+.post-more{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--accent)}
+
+@media(max-width:980px){
+  .hero{padding:44px 0 20px}
+  .hero h1{font-size:40px}
+  .hero > p{font-size:17px}
+  .post-card{grid-template-columns:1fr}
+  .post-thumb{min-height:172px;max-height:210px}
+}
+@media(max-width:560px){
+  .hero h1{font-size:31px}
+  .hero-search #q,.hero-search #searchBtn{height:50px}
+  .hero-search #searchBtn{padding:0 20px}
+  .post-body{padding:20px}
+  .post-title{font-size:22px}
+}
+
+/* the article must line up with the headline, not sit in its own narrower column */
+.blog{max-width:none;margin-left:0;margin-right:0}
+.blog-list{max-width:none;margin:0}
+.post-card{max-width:none;margin:0}
+.blog-more{text-align:left;margin-top:18px}
+
+/* the search field inherits Arial from the UA otherwise */
+#q,#q::placeholder{font-family:var(--sans)}
+#partsFilter,#covFilter{font-family:var(--sans)}
+
+.stats-row{align-items:center}
+.stats-label{line-height:1}
+.hero-stats{align-items:center;font-family:var(--sans)}
+
+.bg-contours{opacity:.2}
+
+.stats-row .hero-stats{margin:0;padding:0}
+
+@media(max-width:980px){
+  #content{padding:20px 16px 64px}
+  .hero-search,.hero,.hero > p{max-width:none}
+}
