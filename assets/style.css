@@ -850,3 +850,84 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 
 .logo svg{display:block}
 .reader-meta{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+
+/* =====================================================================
+   Eighth pass: every article styled alike, a footer that reads as one
+   block again, and the search / project pages brought onto the same
+   visual footing as the home page.
+   ===================================================================== */
+
+/* --- articles: no special casing after the first --- */
+.post-card + .post-card{background:#f9f8f5;border-color:#e3e1d7;grid-template-columns:292px 1fr}
+.post-card + .post-card .post-thumb{min-height:150px}
+.post-card + .post-card .post-title{font-size:28.5px}
+.post-card + .post-card .post-body{padding:30px 30px 30px 27px}
+
+/* --- footer: full-width band, content on the page's column --- */
+.footer-inner,.footer-bottom{max-width:1122px;padding-left:28px;padding-right:28px}
+.footer-inner{grid-template-columns:1fr auto;gap:24px 56px;padding-top:32px;padding-bottom:22px}
+.footer-links{flex-direction:row;flex-wrap:wrap;text-align:left;gap:8px 22px;
+  align-items:baseline;justify-content:flex-end;max-width:520px}
+.footer-bottom{padding-top:14px;padding-bottom:32px}
+
+/* --- search results, matched to the article cards --- */
+#results .card{background:#f9f8f5;border:1px solid #e3e1d7;border-radius:10px;
+  padding:20px 24px;margin:0 0 14px;box-shadow:none;transition:border-color .15s}
+#results .card:hover{border-color:var(--line-strong)}
+.card-top{align-items:baseline;gap:10px}
+.card-top .name{font-family:var(--serif);font-size:20px;font-weight:700;color:var(--ink)}
+.card-top .year{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-faint)}
+.card-top .domain{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent);border:none;background:transparent;padding:0}
+.card .snip{font-family:var(--sans);font-size:14.5px;line-height:1.6;color:var(--ink-dim);
+  margin:9px 0 12px}
+.tag{font-family:var(--sans);font-size:12px;border-radius:999px;padding:4px 11px;
+  background:#eff0e9;border:1px solid #e3e4dc;border-left-width:1px;color:#4a5a4f}
+.tag .ic{display:none}
+.results-head{font-family:var(--sans);border-bottom:1px solid var(--line);
+  padding-bottom:12px;margin-bottom:18px}
+#resultCount{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--ink)}
+.sortnote{font-family:var(--sans);font-size:13px;color:var(--ink-faint)}
+.needs-sum{font-family:var(--sans);font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--amber);background:transparent;border:none;padding:0}
+
+/* --- filters --- */
+#facets{background:transparent}
+.facets-head h2{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-faint)}
+.facet-group h3{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-dim);background:transparent;border:none;padding:10px 0 4px}
+.facet-item{font-family:var(--sans);font-size:13.5px}
+.facet-item .cnt{font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
+.chip{font-family:var(--sans);border-radius:999px}
+
+/* --- project panel --- */
+.drawer-panel{background:var(--bg)}
+.dh h2{font-family:var(--serif);font-size:26px;font-weight:700}
+.dh .year{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink-faint)}
+.dtab{font-family:var(--sans);font-size:14px}
+.dmeta{font-family:var(--sans);font-size:13.5px;color:var(--ink-dim);display:flex;
+  flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding-bottom:14px;
+  border-bottom:1px solid var(--line);margin-bottom:4px}
+.dmeta span,.dmeta a{font-family:var(--sans);font-size:13.5px}
+.sect h4{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--accent);margin:22px 0 7px}
+.sect p,.sect li{font-family:var(--sans);font-size:15px;line-height:1.65;color:var(--ink)}
+.itemlist .item{font-family:var(--sans);font-size:14.5px;line-height:1.6}
+.itemlist .role{color:var(--ink-faint)}
+.mol{font-family:var(--sans);font-size:12.5px;border-radius:999px;background:#eff0e9;
+  border:1px solid #e3e4dc;padding:4px 11px}
+
+/* --- wiki + ask ai --- */
+.wiki-bar{font-family:var(--sans)}
+.wiki-url{font-family:var(--sans);font-size:12.5px;color:var(--ink-faint)}
+.wiki-mode{font-family:var(--sans);font-size:13px}
+.wiki-open{font-family:var(--sans);font-size:13px;font-weight:600}
+.wiki-note{font-family:var(--sans);font-size:13px;color:var(--ink-dim)}
+.wiki-text{font-family:var(--sans);font-size:14px;line-height:1.65;color:var(--ink)}
+.ai-flabel,.ai-usage,.ai-hint,.ai-help{font-family:var(--sans)}
+.ai-msg{font-family:var(--sans);font-size:14.5px;line-height:1.6}
+.ai-q{font-family:var(--sans);font-size:14.5px;border-radius:6px}
+.ai-send{font-family:var(--sans);font-weight:600;border-radius:6px;background:#1e5d43;
+  border-color:#1e5d43}
+.ai-key{font-family:var(--sans);border-radius:6px}
