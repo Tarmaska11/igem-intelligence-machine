@@ -706,3 +706,9 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .post-title{font-size:28.5px}
 .post-body{padding:29px 30px 26px 27px}
 .hero h1{font-size:54px}
+
+/* Let the text set the card's height so the space below it matches the space
+   above. The reference leaves ~108px under the text because its image block is
+   taller than the words; with our flat placeholder that just reads as a hole. */
+.post-thumb{min-height:150px}
+.post-body{padding:30px 30px 30px 27px}
