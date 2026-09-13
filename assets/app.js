@@ -605,10 +605,7 @@ function initAiPane(pane) {
   log.appendChild(el("div", "ai-hint",
     "Answers come only from this project's stored wiki text. The request goes straight " +
     "from your browser to Google with your own key."));
-  if (t.y && t.y < 2022) {
-    const n = el("div", "ai-layout-note", PRE2022_NOTE);
-    log.parentNode.insertBefore(n, log);
-  }
+  if (t.y && t.y < 2022) pane.appendChild(el("div", "ai-layout-note", PRE2022_NOTE));
   pane.appendChild(log);
 
   const form = el("div", "ai-form");
