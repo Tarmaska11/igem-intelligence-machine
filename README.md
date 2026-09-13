@@ -50,6 +50,7 @@ The website ships with prebuilt data. To build it again from the sources:
 python pipeline/build.py             # the search bundles
 python pipeline/build.py --fulltext  # also the wiki-text index (slow, ~15 min)
 python pipeline/lsa.py               # the concept-search model (needs numpy+scipy)
+python pipeline/stamp.py             # after editing any CSS/JS, so browsers refetch it
 ```
 
 `pipeline/sources.json` says where the source summaries, the official iGEM team CSVs and

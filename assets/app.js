@@ -149,7 +149,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js");
+  worker = new Worker("assets/search.worker.js?v=54794ad3");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
