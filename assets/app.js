@@ -1000,50 +1000,6 @@ function paintStats(segs) {
   const hs = $("#heroStats");
   hs.innerHTML = "";
   segs.forEach((s) => hs.appendChild(el("span", "seg", String(s))));
-  if (_visitPill) hs.appendChild(_visitPill);
-}
-
-const groupDigits = (n) => Number(n).toLocaleString("en-US").replace(/,/g, " ");
-
-/* Dig a value out of a JSON response by a dotted path, e.g. "data.up_count". */
-function pluck(obj, path) {
-  return String(path || "count").split(".").reduce(
-    (o, k) => (o == null ? undefined : o[k]), obj);
-}
-
-/* A visit count needs something server-side to do the counting, which a static
-   site has not got. So the number comes from whatever counter the database repo
-   points at - or from a plain value there. If neither works, no pill appears. */
-let _visitPill = null;
-
-async function loadVisits(cfg) {
-  if (!cfg || cfg.enabled === false) return;
-  let n = null;
-  if (typeof cfg.value === "number") {
-    n = cfg.value;
-  } else if (cfg.endpoint) {
-    // count once per browser session, not per page view - it keeps the number
-    // meaningful and keeps a free counter well inside its write limits
-    let cached = null;
-    try { cached = sessionStorage.getItem("igem_visits"); } catch (e) {}
-    if (cached !== null && !isNaN(Number(cached))) {
-      n = Number(cached);
-    } else {
-      try {
-        const r = await fetch(cfg.endpoint, { signal: withTimeout(REMOTE_TIMEOUT) });
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const v = pluck(await r.json(), cfg.field);
-        if (v == null || isNaN(Number(v))) return;
-        n = Number(v);
-        try { sessionStorage.setItem("igem_visits", String(n)); } catch (e) {}
-      } catch (e) { return; }
-    }
-  }
-  if (n == null) return;
-  _visitPill = el("span", "seg",
-    (cfg.label || "Site visited") + ": " + groupDigits(n) + " " + (cfg.suffix || "times"));
-  const hs = $("#heroStats");
-  if (hs && hs.children.length) hs.appendChild(_visitPill);
 }
 
 function applySite(site) {
@@ -1061,7 +1017,6 @@ function applySite(site) {
     btn.hidden = true;
   }
   if (site.parts_button === true) $("#partsBtn").hidden = false;
-  loadVisits(site.visits);
 }
 
 async function loadRemoteContent(base) {
