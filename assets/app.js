@@ -1027,6 +1027,7 @@ function applyFooter(f) {
   if (f.enabled === false) { $("#siteFooter").hidden = true; return; }
   if (typeof f.note === "string") $("#footerNote").textContent = f.note;
   if (typeof f.legal === "string") $("#footerLegal").textContent = f.legal;
+  if (typeof f.copyright === "string") $("#footerCopy").textContent = f.copyright;
   if (Array.isArray(f.links)) {
     const box = $("#footerLinks");
     box.innerHTML = "";
