@@ -551,3 +551,47 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   #content{padding:20px 16px 64px}
   .hero-search,.hero,.hero > p{max-width:none}
 }
+
+/* =====================================================================
+   Second pass: a step down in scale, the search box aligned with the
+   text, a mark before the figures, and a warmer card.
+   ===================================================================== */
+.hero{padding:60px 0 22px}
+.hero h1{font-size:50px;margin:0 0 17px}
+.hero > p{font-size:17.5px;line-height:1.6;max-width:760px;margin:0 0 26px}
+
+/* the old centred layout left a 30px margin here, which read as a gap */
+#heroSearch{margin:0;max-width:1000px}
+.hero-search #q{height:50px;font-size:15.5px;padding:0 16px 0 44px}
+.hero-search .search-ic{left:15px}
+.hero-search #searchBtn{height:50px;padding:0 30px;font-size:15px}
+
+.stats-row{margin:16px 0 0;gap:8px}
+.stats-ic{display:inline-flex;align-items:center;color:var(--ink-dim);line-height:0}
+.stats-label{font-size:13px}
+.hero-stats{gap:8px}
+.hero-stats .seg{font-size:12px;padding:6px 12px}
+
+.blog{margin-top:50px}
+.blog-label{font-size:11px;margin-bottom:17px}
+
+.post-card{grid-template-columns:256px 1fr;background:#faf8f0;border-color:#e6e3d6}
+.post-card:hover{border-color:var(--line-strong)}
+.post-thumb{min-height:196px}
+.post-body{padding:23px 28px 25px}
+.post-title{font-size:23px;margin:0 0 9px}
+.post-abstract{font-size:15.5px;margin:0 0 14px}
+.post-more{font-size:14.5px}
+.post-meta{font-size:11px;margin-bottom:9px}
+
+@media(max-width:980px){
+  .hero{padding:38px 0 18px}
+  .hero h1{font-size:35px}
+  .hero > p{font-size:16.5px}
+  .post-card{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .hero h1{font-size:28px}
+  .hero-search #q,.hero-search #searchBtn{height:46px}
+  .post-title{font-size:20px}
+}
