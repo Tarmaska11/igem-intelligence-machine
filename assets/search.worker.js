@@ -10,7 +10,7 @@ let CARDS = null, INDEX = null, FACETS = null, LSA = null;
 let FT = null;              // full-text: {base, shards:Map}
 let ftBase = null;
 
-/* Same rule as tokens() in pipeline/build.py — "E. coli" also yields "ecoli". */
+/* Same rule as tokens() in pipeline/build.py - "E. coli" also yields "ecoli". */
 function tokenize(text) {
   const t = (text || "").toLowerCase();
   const out = t.match(TOKEN) || [];

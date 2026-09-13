@@ -149,7 +149,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js?v=54794ad3");
+  worker = new Worker("assets/search.worker.js?v=4383e6c0");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
@@ -229,7 +229,7 @@ function renderModeToggle() {
 
 const SORTNOTE = {
   lexical:  "ranked by keyword relevance",
-  hybrid:   "ranked by relevance — keyword + concept",
+  hybrid:   "ranked by relevance - keyword + concept",
 };
 
 function tag(item) {
@@ -418,7 +418,7 @@ function buildDetails(p, t) {
       row.appendChild(el("span", "dot " + (it.importance || "mentioned")));
       const body = el("span");
       body.appendChild(el("b", null, it.name + " "));
-      if (it.role) body.appendChild(el("span", "role", "— " + it.role));
+      if (it.role) body.appendChild(el("span", "role", "- " + it.role));
       row.appendChild(body); w.appendChild(row);
     });
     return w;
@@ -439,7 +439,7 @@ function buildDetails(p, t) {
       } else {
         body.appendChild(el("b", null, it.name));
       }
-      if (it.role) body.appendChild(el("span", "role", " — " + it.role));
+      if (it.role) body.appendChild(el("span", "role", " - " + it.role));
       row.appendChild(body); w.appendChild(row);
     });
     return w;
@@ -587,7 +587,7 @@ function initAiPane(pane) {
     "<b>Get a free Gemini API key (stays in your browser only):</b><br>" +
     "1. Open <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a> and sign in.<br>" +
     "2. Click <b>Create API key</b> (no billing/card needed).<br>" +
-    "3. Paste it in the box above. It is saved only in this browser (localStorage) — " +
+    "3. Paste it in the box above. It is saved only in this browser (localStorage) - " +
     "never uploaded to this site or shared. Clear it anytime by emptying the box.<br>" +
     "<i>Free tier uses the Flash models and has per-minute/day limits.</i>";
   infoBtn.onclick = () => { help.hidden = !help.hidden; };
@@ -619,7 +619,7 @@ function initAiPane(pane) {
       addMsg(log, "you", q); ta.value = "";
       addMsg(log, "ai", "To answer, I need a Google AI Studio API key. Paste yours in " +
         "the box above (click ⓘ for a quick setup guide). It is stored only in your " +
-        "browser — never uploaded or shared.");
+        "browser - never uploaded or shared.");
       return;
     }
     busy = true; send.disabled = true;
@@ -812,7 +812,7 @@ function renderParts(filter) {
   if (!parts.length) box.appendChild(el("div", "empty", "No parts match that filter."));
   else if (parts.length > SHOW)
     box.appendChild(el("div", "empty",
-      `Showing the top ${SHOW} of ${parts.length.toLocaleString()} — refine the filter to see more.`));
+      `Showing the top ${SHOW} of ${parts.length.toLocaleString()} - refine the filter to see more.`));
 }
 
 // ---------- the page configured from the database repo ----------
@@ -1017,6 +1017,30 @@ function applySite(site) {
     btn.hidden = true;
   }
   if (site.parts_button === true) $("#partsBtn").hidden = false;
+  applyFooter(site.footer);
+}
+
+/* The footer ships with sensible text in the page, so it reads correctly with no
+   database at all; anything set here replaces it. */
+function applyFooter(f) {
+  if (!f) return;
+  if (f.enabled === false) { $("#siteFooter").hidden = true; return; }
+  if (typeof f.note === "string") $("#footerNote").textContent = f.note;
+  if (typeof f.legal === "string") $("#footerLegal").textContent = f.legal;
+  if (Array.isArray(f.links)) {
+    const box = $("#footerLinks");
+    box.innerHTML = "";
+    for (const l of f.links) {
+      if (!l || !l.label) continue;
+      if (l.url && /^https?:/i.test(l.url)) {
+        const a = el("a", null, l.label);
+        a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        box.appendChild(a);
+      } else {
+        box.appendChild(el("span", null, l.label));
+      }
+    }
+  }
 }
 
 async function loadRemoteContent(base) {
