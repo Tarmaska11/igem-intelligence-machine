@@ -472,12 +472,21 @@ function initWorkspace(pane) {
 
 // ---- Wiki view: the live page in a frame, with a Live/Saved toggle. Some iGEM
 //      wikis refuse to be framed, so Saved text is always one click away. ----
+/* Wikis from before 2022 sit on igem.org, which sends X-Frame-Options and so can
+   never be framed from here. The Internet Archive keeps a copy of the same page
+   and does not block framing, so that is what we embed for those years. */
+function embedUrl(t) {
+  if (t.y >= WIKI_MOVE_YEAR) return t.u;
+  return "https://web.archive.org/web/" + t.y + "/" + t.u;
+}
+
 function buildWikiView(container, t) {
   if (!t.u) { container.appendChild(el("div", "empty", "No wiki URL on record for this team.")); return; }
-  const embeddable = t.y >= WIKI_MOVE_YEAR;
+  const archived = t.y < WIKI_MOVE_YEAR;
   const bar = el("div", "wiki-bar");
   const modes = el("div", "wiki-modes");
   const liveBtn = el("button", "wiki-mode on", "Live wiki");
+  if (t.y < WIKI_MOVE_YEAR) liveBtn.textContent = "Archived wiki";
   const textBtn = el("button", "wiki-mode", "Saved text");
   modes.append(liveBtn, textBtn);
   const open = el("a", "wiki-open", "Open in new tab ↗"); open.href = t.u; open.target = "_blank"; open.rel = "noopener";
@@ -490,14 +499,13 @@ function buildWikiView(container, t) {
   function showLive() {
     liveBtn.classList.add("on"); textBtn.classList.remove("on");
     stage.innerHTML = "";
-    if (!embeddable) {
+    if (archived) {
       stage.appendChild(el("div", "wiki-note",
-        "Wikis from " + (WIKI_MOVE_YEAR - 1) + " and earlier refuse to be embedded " +
-        "(they send X-Frame-Options), so this frame would stay blank. Use Saved text " +
-        "below, or open the wiki in a new tab."));
+        "Shown from the Internet Archive - igem.org blocks embedding directly. " +
+        "It can take a few seconds to load."));
     }
     const frame = el("iframe", "wiki-frame");
-    frame.src = t.u;
+    frame.src = embedUrl(t);
     frame.setAttribute("referrerpolicy", "no-referrer");
     stage.appendChild(frame);
   }
@@ -513,8 +521,7 @@ function buildWikiView(container, t) {
   }
   liveBtn.onclick = showLive;
   textBtn.onclick = () => showText(false);
-  // an old wiki cannot be framed, so go straight to the text we saved for it
-  if (embeddable) showLive(); else showText(true);
+  showLive();
 }
 
 const _textCache = new Map();
