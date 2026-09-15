@@ -217,6 +217,51 @@ tag. Judging browse quality needs the graded set that still does not exist.
 
 **SHIPPED.**
 
+## Cycle 12 — "and" means and
+
+**Not a measured change — a product decision, recorded here with its cost.**
+
+Cycles 6 and 4 before it widened a too-strict AND into an OR so a long query still
+answered. The owner's call is that a search box should not do that: someone typing
+several words is filtering, and quietly returning records missing half of them makes
+"and" mean something it does not say. The automatic widening is gone from both the
+summary and wiki arms, along with the results note that explained it. Explicit `or`
+still works — that is the reader asking, not the search deciding.
+
+**What it costs, on the sets:**
+
+| set | widening | strict | miss rate |
+|---|---|---|---|
+| known-item | 0.9967 | 0.9917 | 0% -> 0% |
+| para-nl | 0.9917 | 0.9842 | 0% -> 1% |
+| abbrev | 0.7129 | 0.7129 | 0% -> 0% |
+| facet-cohere | 0.8505 | 0.8491 | 0% -> 0% |
+| morph | 0.9583 | **0.1225** | 0% -> 88% |
+| team-lineage | 0.0874 | **0.0000** | 19% -> 100% |
+
+**Read those last two carefully before panicking.** Both sets query with eight rare
+keywords at once, because that is how they are mined. Requiring all eight is close to
+impossible, so they collapse. No person types eight rare words. On queries shaped like
+the ones people actually type, strict AND is fine:
+
+```
+spider silk                     118      microbial fuel cell            558
+heavy metal biosensor           459      crispr gene editing yeast      520
+quorum sensing biofilm          336      detecting heavy metals in water 455
+```
+
+The real cost is elsewhere and the sets do not show it either: **one unknown word now
+empties the result list.** `spider silk biosensr` returns 0 where it used to return
+something. That is the honest behaviour of a filter, and it is what was asked for, but
+it is the thing to watch if people start reporting empty searches.
+
+**Consequence for the harness:** `morph` and `team-lineage` are no longer usable as
+instruments in Keyword mode — they measure a query shape the product no longer serves.
+Either re-mine them with two or three keywords instead of eight, or read them only in
+Concept mode. Do not read a future cycle's morph number against the ones above.
+
+**SHIPPED** (by decision, not by metric).
+
 ---
 
 ## Where it ended up
@@ -225,9 +270,9 @@ tag. Judging browse quality needs the graded set that still does not exist.
 |---|---|---|---|
 | known-item | lexical | 0.9962 | 0.9967 |
 | para-nl | lexical | 0.9967 | 0.9917 |
-| team-lineage | lexical | 0.0023 | **0.0874** |
+| team-lineage | lexical | 0.0023 | 0.0000 (cycle 12 removed the widening) |
 | facet-cohere | lexical | 0.8528 | 0.8505 |
-| morph | lexical | 0.2541 | **0.9583** |
+| morph | lexical | 0.2541 | 0.1225 (cycle 12; see the note there) |
 | abbrev | lexical | 0.1624 | **0.7129** |
 | team-lineage | **concept** | 0.0505 | **0.0875** |
 | facet-cohere | **concept** | 0.8000 | **0.8505** |
