@@ -866,8 +866,8 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .post-card + .post-card .post-body{padding:30px 30px 30px 27px}
 }
 
-/* --- footer: full-width band, content on the page's column --- */
-.footer-inner,.footer-bottom{max-width:1122px;padding-left:28px;padding-right:28px}
+/* --- footer: the band and its content both span the window --- */
+.footer-inner,.footer-bottom{max-width:none;padding-left:40px;padding-right:40px}
 .footer-inner{grid-template-columns:1fr auto;gap:24px 56px;padding-top:32px;padding-bottom:22px}
 .footer-links{flex-direction:row;flex-wrap:wrap;text-align:left;gap:8px 22px;
   align-items:baseline;justify-content:flex-end;max-width:520px}
@@ -1067,4 +1067,33 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .chips-narrow{display:none}
 @media(max-width:880px){
   .chips-narrow:not(:empty){display:flex;margin:0 0 14px}
+}
+
+/* =====================================================================
+   Eleventh pass: four things that only went wrong on a phone.
+   ===================================================================== */
+
+/* the nav button sat alone on its own header row, which read as a mistake.
+   On a phone it moves in with the other footer links instead. */
+.footer-way{display:none}
+@media(max-width:880px){
+  #customBtn{display:none}
+  .footer-way{display:inline;background:none;border:none;padding:0;cursor:pointer;
+    font-family:var(--sans);font-size:14px;color:var(--ink-dim)}
+  .footer-way:hover{color:var(--accent);text-decoration:underline}
+}
+
+@media(max-width:560px){
+  /* every article title the same size, the way they are on a wide screen -
+     the first card was still running at the desktop size */
+  .post-card .post-title,.post-card + .post-card .post-title{font-size:23px;line-height:1.24}
+
+  /* six figures wrapped onto three lines; two is the most that looks tidy */
+  .hero-stats{gap:6px}
+  .hero-stats .seg{font-size:11px;padding:5px 9px}
+}
+
+@media(max-width:380px){
+  .hero-stats{gap:5px}
+  .hero-stats .seg{font-size:10.5px;padding:5px 8px}
 }

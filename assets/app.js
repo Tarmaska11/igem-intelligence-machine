@@ -1063,6 +1063,20 @@ function applySite(site) {
   }
   if (site.parts_button === true) $("#partsBtn").hidden = false;
   applyFooter(site.footer);
+  addFooterWay(nav);
+}
+
+/* The header button is hidden on a phone so the navbar stays one clean row,
+   so the page needs another way in - it joins the footer links. */
+function addFooterWay(nav) {
+  const box = $("#footerLinks");
+  if (!box) return;
+  const old = box.querySelector(".footer-way");
+  if (old) old.remove();
+  if (!nav.enabled || !nav.page) return;
+  const b = el("button", "footer-way", nav.label || "More");
+  b.onclick = () => openCustom(nav.page);
+  box.appendChild(b);
 }
 
 /* The footer ships with sensible text in the page, so it reads correctly with no
