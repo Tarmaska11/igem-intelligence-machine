@@ -1,3 +1,4 @@
 dist-data/
 __pycache__/
 *.pyc
+eval/sets/

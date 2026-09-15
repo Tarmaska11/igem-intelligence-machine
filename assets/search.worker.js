@@ -1,7 +1,12 @@
 "use strict";
 /* Search runs here so typing never freezes the page. */
 
-const K1 = 1.2, B = 0.55;
+const K1 = 3, B = 0.55;
+// a multi-word query where no record has every word would otherwise answer with
+// almost nothing, so below this many AND hits we widen to OR and let BM25 sort it
+const MIN_AND_HITS = 10;
+// the wiki arm scores whole pages, so it keeps the usual BM25 settings
+const WK1 = 1.2, WB = 0.75;
 const TOKEN = /[a-z0-9]{2,32}/g;
 const ABBREV = /\b([a-z])\.\s*([a-z]{3,})\b/g;
 const COMPOUND = /[a-z0-9]+(?:[-_][a-z0-9]+)+/g;
@@ -44,6 +49,169 @@ const SYNONYMS = [
   ["mass spectrometry", "mass spec"],
   ["high performance liquid chromatography", "hplc"],
   ["enzyme linked immunosorbent assay", "elisa"],
+  // mined from the summaries by pipeline/mine_synonyms.py
+  ["adaptive laboratory evolution", "ale"],
+  ["african swine fever", "asf"],
+  ["amoebic gill disease", "agd"],
+  ["amyotrophic lateral sclerosis", "als"],
+  ["anaerobic fluorescent protein", "afp"],
+  ["antifungal porphyrin based intervention system", "apis"],
+  ["aptamer lateral flow assay", "alfa"],
+  ["arsenic binding peptide", "abp"],
+  ["autism spectrum disorder", "asd"],
+  ["bacillus thuringiensis", "bt"],
+  ["bacterial cellulose", "bc"],
+  ["bacterial leaf blight", "blb"],
+  ["banana xanthomonas wilt", "bxw"],
+  ["batrachochytrium dendrobatidis", "bd"],
+  ["beet yellows virus", "byv"],
+  ["biofrag isolation unit", "biu"],
+  ["bovine respiratory disease", "brd"],
+  ["burst size distribution", "bsd"],
+  ["buruli ulcer", "bu"],
+  ["carbonic anhydrase", "ca"],
+  ["catalytic hairpin assembly", "cha"],
+  ["cellulose binding domain", "cbd"],
+  ["chimeric antigen receptor", "car"],
+  ["chronic inflammatory diseases", "cid"],
+  ["chronic kidney disease", "ckd"],
+  ["chronic lymphocytic leukemia", "cll"],
+  ["circular polymerase extension cloning", "cpec"],
+  ["circulating tumor cell", "ctc"],
+  ["colony collapse disorder", "ccd"],
+  ["continuous directed evolution", "cde"],
+  ["coronary artery disease", "cad"],
+  ["cyclic chain displacement reaction", "ccdr"],
+  ["cysteine sulfinic acid decarboxylase", "csad"],
+  ["cystic fibrosis", "cf"],
+  ["cytochrome maturation", "ccm"],
+  ["deformed wing virus", "dwv"],
+  ["degradation tag", "dt"],
+  ["deinococcus radiodurans", "dr"],
+  ["diabetic nephropathy", "dn"],
+  ["diffusible signaling factor", "dsf"],
+  ["digital in line holographic microscope", "dihm"],
+  ["double vector system", "dvs"],
+  ["dystrophic epidermolysis bullosa", "deb"],
+  ["electrochemical impedance spectroscopy", "eis"],
+  ["emerald ash borer", "eab"],
+  ["enhanced yellow fluorescent protein", "eyfp"],
+  ["enzymatic fuel cell", "efc"],
+  ["enzymatic microbial fuel cell", "emfc"],
+  ["enzyme fragment complementation assay", "efca"],
+  ["enzyme replacement therapy", "ert"],
+  ["epidermal growth factor", "egf"],
+  ["ethylene glycol", "eg"],
+  ["exocrine pancreatic insufficiency", "epi"],
+  ["feed forward loop", "ffl"],
+  ["finite state automaton", "fsa"],
+  ["fluorescence resonance energy transfer", "fret"],
+  ["flux balance analysis", "fba"],
+  ["fusarium head blight", "fhb"],
+  ["generalized additive models", "gam"],
+  ["glucocorticoid receptor", "gr"],
+  ["green fluorescent protein", "gfp"],
+  ["health risk detection kit", "hrdk"],
+  ["heat shock protein", "hsp"],
+  ["hepatic encephalopathy", "he"],
+  ["hepatitis virus", "hbv"],
+  ["hepatitis virus", "hcv"],
+  ["hereditary fructose intolerance", "hfi"],
+  ["horizontal gene transfer", "hgt"],
+  ["human chorionic gonadotropin", "hcg"],
+  ["human estrogen receptor", "her"],
+  ["human gastric intrinsic factor", "hgif"],
+  ["human serum albumin", "hsa"],
+  ["hyaluronic acid", "ha"],
+  ["hybridization chain reaction", "hcr"],
+  ["ice nucleation protein", "inp"],
+  ["idealized protein purification", "ipp"],
+  ["idiopathic pulmonary fibrosis", "ipf"],
+  ["inflammatory bowel disease", "ibd"],
+  ["integrated human practices", "ihp"],
+  ["intrinsic factor", "if"],
+  ["invasive candidiasis", "ic"],
+  ["irritable bowel syndrome", "ibs"],
+  ["iterative capped assembly", "ica"],
+  ["lactic acid mediated", "lam"],
+  ["lateral flow assay", "lfa"],
+  ["leaf compost cutinase", "lcc"],
+  ["lethal toxin neutralizing factor", "ltnf"],
+  ["ligase chain reaction", "lcr"],
+  ["live biotherapeutic product", "lbp"],
+  ["localized surface plasmon resonance", "lspr"],
+  ["logical genetic diagram", "lgd"],
+  ["major depressive disorder", "mdd"],
+  ["maple syrup urine disease", "msud"],
+  ["methicillin resistant staphylococcus aureus", "mrsa"],
+  ["microbial desalination cell", "mdc"],
+  ["microbial enhanced oil recovery", "meor"],
+  ["microbial fuel cell", "mfc"],
+  ["microbially induced calcite precipitation", "micp"],
+  ["mild traumatic brain injury", "mtbi"],
+  ["mini bioproduction cycle system", "mbcs"],
+  ["modular receptor platform", "mrp"],
+  ["mountain pine beetle", "mpb"],
+  ["multiplex automated genome engineering", "mage"],
+  ["mussel foot protein", "mfp"],
+  ["nitric oxide", "no"],
+  ["nuclear receptor", "nr"],
+  ["oak processionary caterpillar", "opc"],
+  ["oil mill wastewater", "omw"],
+  ["open sequence format", "osf"],
+  ["oral squamous cell carcinoma", "oscc"],
+  ["paper analytical device", "pad"],
+  ["paralytic shellfish poisoning", "psp"],
+  ["pattern recognition receptor", "prr"],
+  ["pernicious anaemia", "pa"],
+  ["phenylalanine ammonia lyase", "pal"],
+  ["phosphate binding protein", "pbp"],
+  ["poly lactic acid", "pla"],
+  ["precipitated calcium carbonate", "pcc"],
+  ["protective phytochemical quantifier", "ppq"],
+  ["protein degradation tags", "pdt"],
+  ["pyruvate dehydrogenase complex", "pdc"],
+  ["quartz crystal microbalance", "qcm"],
+  ["quorum sensing", "qs"],
+  ["random positioning machine", "rpm"],
+  ["reactive oxygen species", "ros"],
+  ["recombinant epidermal growth factor", "regf"],
+  ["recombinase polymerase amplification", "rpa"],
+  ["recombination directionality factor", "rdf"],
+  ["red fluorescent protein", "rfp"],
+  ["reduced graphene oxide", "rgo"],
+  ["regulatory flux balance analysis", "rfba"],
+  ["rheumatoid arthritis", "ra"],
+  ["ribosome binding site", "rbs"],
+  ["rna iii inhibiting peptide", "rip"],
+  ["rolling circle amplification", "rca"],
+  ["rolling circle replication", "rcr"],
+  ["rotating biological contactor", "rbc"],
+  ["salicylic acid", "sa"],
+  ["small heat shock proteins", "shsp"],
+  ["soil based microbial fuel cell", "smfc"],
+  ["spinal cord injury", "sci"],
+  ["stony coral tissue loss disease", "sctld"],
+  ["stop codon readthrough", "scr"],
+  ["sulfide quinone reductase", "sqr"],
+  ["sustainable aviation fuel", "saf"],
+  ["synthetic expression system", "ses"],
+  ["terminal deoxynucleotidyl transferase", "tdt"],
+  ["tetracycline mimic inhibitor peptide", "tip"],
+  ["tobacco mosaic virus", "tmv"],
+  ["tomato spotted wilt virus", "tswv"],
+  ["toxic shock syndrome", "tss"],
+  ["transmembrane readiness framework", "trf"],
+  ["trigger factor", "tf"],
+  ["triple negative breast cancer", "tnbc"],
+  ["tyrosine ammonia lyase", "tal"],
+  ["universal bacterial expression resource", "uber"],
+  ["unnatural amino acid", "uaa"],
+  ["uric acid", "ua"],
+  ["west nile virus", "wnv"],
+  ["white nose syndrome", "wns"],
+  ["yellow fluorescent protein", "yfp"],
+  ["zosteric acid", "za"],
 ];
 
 const GROUP_OF = new Map();
@@ -65,17 +233,85 @@ function parseQuery(q) {
       const phrase = words.slice(i, i + len).join(" ");
       const gi = GROUP_OF.get(phrase);
       if (gi !== undefined) {
-        units.push(SYNONYMS[gi].map((f) => f.split(" ")));
+        units.push(SYNONYMS[gi].map((f) => ({ w: f.split(" "), m: 1 })));
         i += len;
         matched = true;
       }
     }
     if (!matched) {
-      if (words[i].length > 1) units.push([[words[i]]]);
+      const w = words[i];
+      if (w.length > 1) {
+        const g = spellingsFor(w);
+        units.push(g ? g.map((f, n) => ({ w: [f], m: n ? FOLD_WEIGHT : 1 }))
+                     : [{ w: [w], m: 1 }]);
+      }
       i++;
     }
   }
   return units;
+}
+
+/* Plurals. "spider" and "spiders" are separate words in the index, so a search for
+   one misses the other - and on a multi-word query that loses most of the results,
+   because every word has to match something.
+
+   The rule is derived from the index itself rather than a word list: strip a plural
+   ending, and keep the pair only if the singular is already a term the corpus uses
+   often. That is what stops sars -> sar and genes -> gen, without anyone having to
+   maintain a list of exceptions. */
+const FOLD_MIN_DF = 20;
+// a plural only found through folding counts for less, so a record that
+// actually uses the word typed still comes first
+const FOLD_WEIGHT = 0.35;
+let FOLDS = null;   // term -> every spelling in its group
+
+function stemOf(w, minDf) {
+  const terms = INDEX.terms;
+  for (const [suf, rep] of [["ies", "y"], ["es", ""], ["s", ""]]) {
+    if (w.endsWith(suf) && w.length - suf.length >= 3) {
+      const c = w.slice(0, w.length - suf.length) + rep;
+      if (c !== w && terms[c] && terms[c][0].length >= minDf) return c;
+    }
+  }
+  return null;
+}
+
+/* What a typed word should look for. A word the corpus never uses still folds, so
+   typing a plural the teams never wrote still finds the singular. */
+function spellingsFor(w) {
+  const g = FOLDS && FOLDS.get(w);
+  if (g) return g;
+  if (INDEX.terms[w]) return null;
+  const stem = stemOf(w, FOLD_MIN_DF);
+  return stem ? [w, stem] : null;
+}
+
+function buildFolds() {
+  FOLDS = new Map();
+  const terms = INDEX.terms;
+  for (const w in terms) {
+    const stem = stemOf(w, FOLD_MIN_DF);
+    if (!stem) continue;
+    for (const [a, b] of [[w, stem], [stem, w]]) {
+      let g = FOLDS.get(a);
+      if (!g) { g = [a]; FOLDS.set(a, g); }
+      if (g.indexOf(b) < 0) g.push(b);
+    }
+  }
+}
+
+/* "casein and milk OR bovine albumin" becomes two groups. Everything inside a group
+   has to match; a record only needs one group. AND is what a plain space already
+   does, so it is allowed mainly so a query reads the way people write it. */
+function parseGroups(q) {
+  const raw = (q || "").trim();
+  if (!raw) return [];
+  const groups = [];
+  for (const part of raw.split(/\s+or\s+/i)) {
+    const units = parseQuery(part.replace(/\s+and\s+/gi, " "));
+    if (units.length) groups.push(units);
+  }
+  return groups;
 }
 
 function postings(term) {
@@ -89,7 +325,7 @@ function postings(term) {
 }
 
 /* Score one spelling: all of its words must be in the document. */
-function scoreSpelling(words, acc, allow) {
+function scoreSpelling(words, acc, allow, mult) {
   const lists = [];
   for (const w of words) {
     const p = postings(w);
@@ -118,27 +354,31 @@ function scoreSpelling(words, acc, allow) {
       const tf = l.weights[at];
       total += idf * (tf * (K1 + 1)) / (tf + K1 * (1 - B + B * dl[id] / avgdl));
     }
-    hits.set(id, total);
+    hits.set(id, total * (mult === undefined ? 1 : mult));
   }
   for (const [id, s] of hits) acc.set(id, Math.max(acc.get(id) || 0, s));
   return hits.size;
 }
 
-function runUnits(units, allow) {
+function runUnits(units, allow, orFallback) {
   const perUnit = units.map((unit) => {
     const acc = new Map();
-    for (const spelling of unit) scoreSpelling(spelling, acc, allow);
+    for (const sp of unit) scoreSpelling(sp.w, acc, allow, sp.m);
     return acc;
   });
   if (!perUnit.length) return null;
-  // AND across units; if that is empty, fall back to OR so a long query still answers.
+  // AND across units; when that is too strict, widen to OR so a long query answers.
   let ids = null;
   for (const acc of perUnit) {
     if (ids === null) ids = new Set(acc.keys());
     else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
   }
   let mode = "all";
-  if (!ids || ids.size === 0) {
+  if (orFallback !== false && (!ids || ids.size < MIN_AND_HITS)) {
+    const any = new Set();
+    for (const acc of perUnit) for (const id of acc.keys()) any.add(id);
+    if (!ids || any.size > ids.size) { ids = any; mode = "any"; }
+  } else if (!ids || ids.size === 0) {
     ids = new Set();
     for (const acc of perUnit) for (const id of acc.keys()) ids.add(id);
     mode = "any";
@@ -154,6 +394,21 @@ function runUnits(units, allow) {
   }
   scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   return { scored, mode };
+}
+
+/* One group is the ordinary case and goes straight through. With several, a record
+   keeps its best group's score. */
+function runGroups(groups, allow, orFallback) {
+  if (groups.length === 1) return runUnits(groups[0], allow, orFallback);
+  const best = new Map();
+  for (const units of groups) {
+    const r = runUnits(units, allow, orFallback);
+    if (!r) continue;
+    for (const [id, s] of r.scored) best.set(id, Math.max(best.get(id) || 0, s));
+  }
+  const scored = Array.from(best);
+  scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  return { scored, mode: "any-of" };
 }
 
 function allowedByFilters(filters) {
@@ -189,6 +444,31 @@ function facetCounts(resultIds) {
   return out;
 }
 
+/* Document lengths for the wiki arm. Without them a 350k-word wiki outranks a
+   focused one just for being long. An older database repo may not have the file,
+   and then the arm falls back to plain tf-idf the way it used to. */
+async function loadWikiMeta() {
+  if (!ftBase) return null;
+  if (!FT.meta) {
+    FT.meta = (async () => {
+      for (const base of ftBase) {
+        try {
+          const ctl = new AbortController();
+          const timer = setTimeout(() => ctl.abort(), 8000);
+          const r = await fetch(base + "fulltext/meta.json.gz", { signal: ctl.signal })
+            .finally(() => clearTimeout(timer));
+          if (!r.ok) continue;
+          const text = await new Response(
+            r.body.pipeThrough(new DecompressionStream("gzip"))).text();
+          return JSON.parse(text);
+        } catch (e) { /* try the next origin */ }
+      }
+      return null;
+    })();
+  }
+  return FT.meta;
+}
+
 async function loadShard(term) {
   if (!ftBase) return null;
   const h = shardOf(term);
@@ -217,9 +497,12 @@ async function loadShard(term) {
 async function wikiTail(units, allow, primary) {
   if (!ftBase || !units.length) return [];
   const wanted = new Set();
-  for (const unit of units) for (const spelling of unit) for (const w of spelling) wanted.add(w);
+  for (const unit of units) for (const sp of unit) for (const w of sp.w) wanted.add(w);
   const shards = new Map();
   await Promise.all(Array.from(wanted).map(async (w) => { shards.set(w, await loadShard(w)); }));
+  const wmeta = await loadWikiMeta();
+  const NW = (wmeta && wmeta.docs) || CARDS.length;
+  const wdl = wmeta && wmeta.dl, wavg = wmeta && wmeta.avgdl;
 
   const listOf = (w) => {
     const sh = shards.get(w);
@@ -236,10 +519,10 @@ async function wikiTail(units, allow, primary) {
   const perUnit = [];
   for (const unit of units) {
     const acc = new Map();
-    for (const spelling of unit) {
+    for (const sp of unit) {
       const lists = [];
       let ok = true;
-      for (const w of spelling) {
+      for (const w of sp.w) {
         const l = listOf(w);
         if (!l) { ok = false; break; }
         lists.push(l);
@@ -258,9 +541,13 @@ async function wikiTail(units, allow, primary) {
             if (l.ids[mid] < id) lo = mid + 1; else hi = mid - 1;
           }
           if (at < 0) { present = false; break; }
-          score += Math.log(1 + l.tfs[at]) * Math.log(1 + CARDS.length / l.ids.length);
+          const wdf = l.ids.length, wtf = l.tfs[at];
+          const widf = Math.log(1 + (NW - wdf + 0.5) / (wdf + 0.5));
+          score += wdl
+            ? widf * (wtf * (WK1 + 1)) / (wtf + WK1 * (1 - WB + WB * wdl[id] / wavg))
+            : Math.log(1 + wtf) * Math.log(1 + NW / wdf);
         }
-        if (present) acc.set(id, Math.max(acc.get(id) || 0, score));
+        if (present) acc.set(id, Math.max(acc.get(id) || 0, score * sp.m));
       }
     }
     perUnit.push(acc);
@@ -272,9 +559,10 @@ async function wikiTail(units, allow, primary) {
     if (ids === null) ids = new Set(acc.keys());
     else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
   }
-  if (!ids || !ids.size) {
-    ids = new Set();
-    for (const acc of perUnit) for (const id of acc.keys()) ids.add(id);
+  if (!ids || ids.size < MIN_AND_HITS) {
+    const any = new Set();
+    for (const acc of perUnit) for (const id of acc.keys()) any.add(id);
+    if (!ids || any.size > ids.size) ids = any;
   }
   const out = [];
   for (const id of ids) {
@@ -284,6 +572,22 @@ async function wikiTail(units, allow, primary) {
     for (const acc of perUnit) s += acc.get(id) || 0;
     out.push([id, s]);
   }
+  out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  return out;
+}
+
+/* Same grouping as runGroups, on the wiki arm. */
+async function wikiTailGroups(groups, allow, primary) {
+  if (groups.length === 1) {
+    return (await wikiTail(groups[0], allow, primary)).map((x) => x[0]);
+  }
+  const best = new Map();
+  for (const units of groups) {
+    for (const [id, s] of await wikiTail(units, allow, primary)) {
+      best.set(id, Math.max(best.get(id) || 0, s));
+    }
+  }
+  const out = Array.from(best);
   out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   return out.map((x) => x[0]);
 }
@@ -383,6 +687,29 @@ function semanticScores(q) {
 }
 
 const RRF_C = 60, SEM_TOPN = 400;
+// the keyword ranking is the more reliable of the two, so the concept ranking
+// nudges it rather than getting an equal vote
+// a cosine below this is not relatedness, just noise
+const SEM_MIN = 0.12;
+
+/* Concept mode adds related teams below the keyword ones instead of reordering them.
+
+   Fusing the two rankings was measurably worse than plain keyword search on every
+   set: the concept ranking is the weaker of the two, and reciprocal rank fusion
+   gives it an equal vote, so it pulled good keyword hits down. Appending cannot do
+   that - the keyword order is untouched and the concept arm only adds what keyword
+   search missed, which is what the mode says it does. */
+function conceptTail(lexIds, sem, allow, primary) {
+  const pool = [];
+  for (let i = 0; i < sem.length; i++) {
+    if (primary.has(i)) continue;
+    if (allow && !allow.has(i)) continue;
+    if (sem[i] <= SEM_MIN) continue;
+    pool.push([i, sem[i]]);
+  }
+  pool.sort((a, b) => b[1] - a[1]);
+  return pool.slice(0, SEM_TOPN).map((x) => x[0]);
+}
 
 /* Reciprocal rank fusion of the keyword ranking and the concept ranking. */
 function fuse(lexIds, sem, allow) {
@@ -402,7 +729,7 @@ function fuse(lexIds, sem, allow) {
   for (const id of all) {
     let s = 0;
     if (lexRank.has(id)) s += 1 / (RRF_C + lexRank.get(id));
-    if (semRank.has(id)) s += 1 / (RRF_C + semRank.get(id));
+    if (semRank.has(id)) s += SEM_W / (RRF_C + semRank.get(id));
     scored.push([id, s]);
   }
   scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
@@ -414,7 +741,7 @@ self.onmessage = async (ev) => {
 
   if (msg.type === "fulltext") {
     ftBase = (msg.bases && msg.bases.length) ? msg.bases : null;
-    FT = { base: ftBase, shards: new Map() };
+    FT = { base: ftBase, shards: new Map(), meta: null };
     return;
   }
 
@@ -427,9 +754,10 @@ self.onmessage = async (ev) => {
   if (msg.type === "load") {
     CARDS = msg.cards;
     INDEX = msg.index;
+    buildFolds();
     FACETS = msg.facets;
     ftBase = (msg.fulltextBases && msg.fulltextBases.length) ? msg.fulltextBases : null;
-    FT = { base: ftBase, shards: new Map() };
+    FT = { base: ftBase, shards: new Map(), meta: null };
     self.postMessage({ type: "ready", n: CARDS.length, terms: Object.keys(INDEX.terms).length });
     return;
   }
@@ -437,36 +765,56 @@ self.onmessage = async (ev) => {
   if (msg.type === "search") {
     const t0 = performance.now();
     const allow = allowedByFilters(msg.filters);
-    const units = parseQuery(msg.q);
-    let ids, scores = null, matchMode = null, wikiOnly = new Set(), usedMode = "lexical";
+    const groups = parseGroups(msg.q);
+    const units = groups.length === 1 ? groups[0] : [];
+    let ids, scores = null, matchMode = null, wikiOnly = new Set(),
+        relatedOnly = new Set(), usedMode = "lexical";
 
-    if (!units.length) {
+    if (!groups.length) {
       ids = allow ? Array.from(allow) : CARDS.map((_, i) => i);
-      ids.sort((a, b) => (CARDS[b].y - CARDS[a].y) || CARDS[a].t.localeCompare(CARDS[b].t));
+      ids.sort((a, b) => (CARDS[b].year - CARDS[a].year) ||
+                         CARDS[a].team_name.localeCompare(CARDS[b].team_name));
     } else {
-      const res = runUnits(units, allow);
+      const res = runGroups(groups, allow, true);
       scores = res.scored;
       matchMode = res.mode;
       ids = scores.map((s) => s[0]);
+      let primary = new Set(ids);
       if (msg.mode === "hybrid" && LSA) {
         const sem = semanticScores(msg.q);
-        if (sem) { ids = fuse(ids, sem, allow); usedMode = "hybrid"; }
+        if (sem) {
+          const related = conceptTail(ids, sem, allow, primary);
+          relatedOnly = new Set(related);
+          ids = ids.concat(related);
+          primary = new Set(ids);
+          usedMode = "hybrid";
+        }
       }
-      const primary = new Set(ids);
-      const tail = await wikiTail(units, allow, primary);
+      const tail = await wikiTailGroups(groups, allow, primary);
       wikiOnly = new Set(tail);
       ids = ids.concat(tail);
+    }
+
+    // the eval harness wants the whole ranking, not a page of cards
+    if (msg.idsOnly) {
+      self.postMessage({
+        type: "results", seq: msg.seq, total: ids.length, mode: usedMode,
+        matchMode: matchMode, wikiOnly: wikiOnly.size,
+        ms: Math.round(performance.now() - t0), ids: ids,
+      });
+      return;
     }
 
     const page = Math.max(1, msg.page || 1);
     const size = msg.pageSize || 20;
     const slice = ids.slice((page - 1) * size, page * size);
     const words = [];
-    for (const unit of units) for (const spelling of unit) for (const w of spelling) words.push(w);
+    for (const g of groups) for (const u of g) for (const sp of u) for (const w of sp.w) words.push(w);
     const results = slice.map((i) => {
       const c = CARDS[i];
       const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
       if (wikiOnly.has(i)) r.wiki_only = true;
+      if (relatedOnly.has(i)) r.related = true;
       return r;
     });
     self.postMessage({

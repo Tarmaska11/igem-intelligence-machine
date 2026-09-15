@@ -38,7 +38,7 @@ const MODES = [
   ["lexical", "Keyword", "Exact keyword matching (BM25), with a smart OR fallback for recall"],
   // the tail is split off so a narrow phone can drop it and still fit the
   // switch next to the nav buttons
-  ["hybrid",  "Concept", "Keyword matches plus conceptually related teams", " + Keyword"],
+  ["hybrid",  "Concept", "Every keyword match, then projects about the same thing", " + Keyword"],
 ];
 const DEFAULT_MODE = "lexical";
 
@@ -152,7 +152,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js?v=b72df6e0");
+  worker = new Worker("assets/search.worker.js?v=386869a1");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
@@ -236,7 +236,13 @@ function renderModeToggle() {
 
 const SORTNOTE = {
   lexical:  "ranked by keyword relevance",
-  hybrid:   "ranked by relevance - keyword + concept",
+  hybrid:   "keyword matches first, then related projects",
+};
+
+// says how the words were combined, so a wide result set is not a surprise
+const MATCHNOTE = {
+  "any-of": " · matching any of your or groups",
+  "any":    " · too few teams had every word, so any of them counts",
 };
 
 function tag(item) {
@@ -273,6 +279,11 @@ function renderResults(data) {
     if (r.wiki_only) {
       const b = el("span", "needs-sum", "wiki text match");
       b.title = "The summary does not mention your words, but this team's wiki does.";
+      top.appendChild(b);
+    }
+    if (r.related) {
+      const b = el("span", "needs-sum", "related");
+      b.title = "Not a keyword match - this project reads as being about the same thing.";
       top.appendChild(b);
     }
     if (r.snippet) c.appendChild(el("div", "snip", r.snippet));
@@ -894,7 +905,7 @@ async function run(push) {
   if (seq !== _runSeq) return;   // a newer run started while we waited
   if (m.mode && m.mode !== state.mode) { state.mode = m.mode; renderModeToggle(); }
   $("#sortnote").textContent = (SORTNOTE[m.mode] || SORTNOTE.lexical) +
-    (m.ms != null ? " · " + m.ms + " ms" : "");
+    (MATCHNOTE[m.matchMode] || "") + (m.ms != null ? " · " + m.ms + " ms" : "");
   const res = { total: m.total, page: m.page, page_size: PAGE_SIZE, results: m.results };
   renderResults(res);
   state.lastRes = res;

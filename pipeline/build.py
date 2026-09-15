@@ -394,6 +394,8 @@ def build_parts(records):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fulltext", action="store_true")
+    ap.add_argument("--index-only", dest="index_only", action="store_true",
+                    help="rebuild the wiki index but leave the saved text alone")
     args = ap.parse_args()
     t0 = time.time()
 
@@ -404,6 +406,13 @@ def main():
     print("records   : %d  (dropped %s)" % (len(records), dict(dropped)))
     matched = sum(1 for r in records if r.get("mt"))
     print("metadata  : %d joined (%.1f%%)" % (matched, 100.0 * matched / len(records)))
+
+    # rewriting the bundles would stamp a new version and make every eval set look
+    # stale, so an index-only run leaves them exactly as they are
+    if args.index_only:
+        build_fulltext(records, index_only=True)
+        print("\ndone in %.0fs" % (time.time() - t0))
+        return
 
     years = sorted({r["y"] for r in records})
     facets = build_facets(records)
@@ -454,8 +463,8 @@ def main():
         with open(os.path.join(target, "manifest.json"), "w", encoding="utf-8", newline="\n") as fh:
             json.dump(man, fh, indent=2)
 
-    if args.fulltext:
-        build_fulltext(records)
+    if args.fulltext or args.index_only:
+        build_fulltext(records, index_only=args.index_only)
     print("\ndone in %.0fs" % (time.time() - t0))
 
 
@@ -484,7 +493,7 @@ def wiki_paths():
     return _WIKI_INDEX
 
 
-def build_fulltext(records):
+def build_fulltext(records, index_only=False):
     """Sharded inverted index over the raw wiki text, plus the text itself.
 
     Postings are spooled to one temporary file per shard and merged at the end.
@@ -513,15 +522,18 @@ def build_fulltext(records):
     del df
 
     spool = [open(os.path.join(tmp, "%03d.txt" % s), "w", encoding="utf-8") for s in range(NSHARD)]
+    lengths = [0] * len(records)
     for n, (i, p) in enumerate(sorted(paths.items())):
         text = open(p, encoding="utf-8", errors="ignore").read()
         tf = collections.Counter(tokens(text))
+        lengths[i] = sum(tf.values())
         for t, c in tf.items():
             if t in keep:
                 spool[shard_of(t)].write("%s\t%d\t%d\n" % (t, i, min(c, 255)))
-        gzp = os.path.join(out, "text", records[i]["id"] + ".txt.gz")
-        with gzip.GzipFile(gzp, "wb", 9, mtime=0) as fh:
-            fh.write(text.encode("utf-8"))
+        if not index_only:
+            gzp = os.path.join(out, "text", records[i]["id"] + ".txt.gz")
+            with gzip.GzipFile(gzp, "wb", 9, mtime=0) as fh:
+                fh.write(text.encode("utf-8"))
         if n % 500 == 0:
             for f in spool:
                 f.flush()
@@ -552,7 +564,14 @@ def build_fulltext(records):
         if s % 64 == 0:
             print("   merged shard %d/%d" % (s, NSHARD), flush=True)
     os.rmdir(tmp)
-    print("[fulltext] %d shards, %.1f MB gz" % (NSHARD, total / 1e6), flush=True)
+    # the shards are keyed by term, so document lengths need a file of their own
+    nz = [x for x in lengths if x]
+    meta = {"n": len(lengths), "docs": len(nz),
+            "avgdl": round(sum(nz) / float(len(nz) or 1), 2), "dl": lengths}
+    _, mgz = write_gz(os.path.join(out, "meta.json.gz"), meta)
+    total += mgz
+    print("[fulltext] %d shards, %.1f MB gz, avgdl %.0f"
+          % (NSHARD, total / 1e6, meta["avgdl"]), flush=True)
 
 
 if __name__ == "__main__":
