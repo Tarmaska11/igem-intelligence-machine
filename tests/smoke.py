@@ -171,6 +171,39 @@ def main():
         page.locator("#filterBtn").click()
         page.wait_for_timeout(700)
         check("filter panel opens", page.locator("#facets").is_visible())
+        # the filter panel slides off-canvas here, so the applied filters are
+        # repeated above the results - without that row there is no way to see
+        # or clear a filter on a phone
+        page.locator(".facet-item").first.click()
+        page.wait_for_timeout(1800)
+        page.locator(".facets-close").click()
+        page.wait_for_timeout(500)
+        check("active filters shown above the results",
+              page.locator("#activeChipsTop .chip").count() > 0)
+        page.locator("#activeChipsTop .chip").first.click()
+        page.wait_for_timeout(1500)
+        check("tapping one clears it", page.locator("#activeChipsTop .chip").count() == 0)
+        # the nav button is hidden on a phone, so the page it opens has to be
+        # reachable from the footer instead
+        check("nav page reachable from the footer", page.locator(".footer-way").is_visible())
+        page.locator(".footer-way").click()
+        page.wait_for_timeout(2500)
+        check("nav page opens on a phone", page.locator("#customView").is_visible())
+
+        # the four things that were only wrong on a phone
+        page.goto(BASE, wait_until="domcontentloaded")
+        page.wait_for_selector("#heroStats:not(:empty)", timeout=40000)
+        page.wait_for_selector(".post-title", timeout=20000)
+        page.wait_for_timeout(1200)
+        sizes = page.evaluate(
+            "()=>[...document.querySelectorAll('.post-title')].map(t=>getComputedStyle(t).fontSize)")
+        check("every article title the same size", len(set(sizes)) == 1, sizes)
+        rows = page.evaluate("()=>{const ys=[...document.querySelectorAll('.hero-stats .seg')]"
+                             ".map(s=>Math.round(s.getBoundingClientRect().top));"
+                             "return [...new Set(ys)].length;}")
+        check("figures fit on two lines", rows <= 2, rows)
+        check("the nav button stays out of the header",
+              not page.locator("#customBtn").is_visible())
 
         check("no javascript errors in our own code", not errors, errors[:3])
         browser.close()
