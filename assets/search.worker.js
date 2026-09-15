@@ -2,9 +2,6 @@
 /* Search runs here so typing never freezes the page. */
 
 const K1 = 3, B = 0.55;
-// a multi-word query where no record has every word would otherwise answer with
-// almost nothing, so below this many AND hits we widen to OR and let BM25 sort it
-const MIN_AND_HITS = 10;
 // the wiki arm scores whole pages, so it keeps the usual BM25 settings
 const WK1 = 1.2, WB = 0.75;
 const TOKEN = /[a-z0-9]{2,32}/g;
@@ -360,49 +357,37 @@ function scoreSpelling(words, acc, allow, mult) {
   return hits.size;
 }
 
-function runUnits(units, allow, orFallback) {
+function runUnits(units, allow) {
   const perUnit = units.map((unit) => {
     const acc = new Map();
     for (const sp of unit) scoreSpelling(sp.w, acc, allow, sp.m);
     return acc;
   });
   if (!perUnit.length) return null;
-  // AND across units; when that is too strict, widen to OR so a long query answers.
+  // every word has to be there. A query that matches nothing returns nothing -
+  // widening it on the reader's behalf would make "and" mean something else.
   let ids = null;
   for (const acc of perUnit) {
     if (ids === null) ids = new Set(acc.keys());
     else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
   }
-  let mode = "all";
-  if (orFallback !== false && (!ids || ids.size < MIN_AND_HITS)) {
-    const any = new Set();
-    for (const acc of perUnit) for (const id of acc.keys()) any.add(id);
-    if (!ids || any.size > ids.size) { ids = any; mode = "any"; }
-  } else if (!ids || ids.size === 0) {
-    ids = new Set();
-    for (const acc of perUnit) for (const id of acc.keys()) ids.add(id);
-    mode = "any";
-  }
   const scored = [];
-  for (const id of ids) {
-    let s = 0, hitUnits = 0;
-    for (const acc of perUnit) {
-      const v = acc.get(id);
-      if (v !== undefined) { s += v; hitUnits++; }
-    }
-    scored.push([id, s * (1 + 0.35 * (hitUnits - 1))]);
+  for (const id of (ids || [])) {
+    let s = 0;
+    for (const acc of perUnit) s += acc.get(id) || 0;
+    scored.push([id, s]);
   }
   scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  return { scored, mode };
+  return { scored, mode: "all" };
 }
 
 /* One group is the ordinary case and goes straight through. With several, a record
    keeps its best group's score. */
-function runGroups(groups, allow, orFallback) {
-  if (groups.length === 1) return runUnits(groups[0], allow, orFallback);
+function runGroups(groups, allow) {
+  if (groups.length === 1) return runUnits(groups[0], allow);
   const best = new Map();
   for (const units of groups) {
-    const r = runUnits(units, allow, orFallback);
+    const r = runUnits(units, allow);
     if (!r) continue;
     for (const [id, s] of r.scored) best.set(id, Math.max(best.get(id) || 0, s));
   }
@@ -559,13 +544,9 @@ async function wikiTail(units, allow, primary) {
     if (ids === null) ids = new Set(acc.keys());
     else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
   }
-  if (!ids || ids.size < MIN_AND_HITS) {
-    const any = new Set();
-    for (const acc of perUnit) for (const id of acc.keys()) any.add(id);
-    if (!ids || any.size > ids.size) ids = any;
-  }
+
   const out = [];
-  for (const id of ids) {
+  for (const id of (ids || [])) {
     if (primary.has(id)) continue;
     if (allow && !allow.has(id)) continue;
     let s = 0;
@@ -775,7 +756,7 @@ self.onmessage = async (ev) => {
       ids.sort((a, b) => (CARDS[b].year - CARDS[a].year) ||
                          CARDS[a].team_name.localeCompare(CARDS[b].team_name));
     } else {
-      const res = runGroups(groups, allow, true);
+      const res = runGroups(groups, allow);
       scores = res.scored;
       matchMode = res.mode;
       ids = scores.map((s) => s[0]);

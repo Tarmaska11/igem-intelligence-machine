@@ -152,7 +152,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js?v=386869a1");
+  worker = new Worker("assets/search.worker.js?v=8629a4a5");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
@@ -237,11 +237,6 @@ function renderModeToggle() {
 const SORTNOTE = {
   lexical:  "ranked by keyword relevance",
   hybrid:   "keyword matches first, then related projects",
-};
-
-// explains a wider result set than the words asked for
-const MATCHNOTE = {
-  "any":    " · too few teams had every word, so any of them counts",
 };
 
 function tag(item) {
@@ -904,7 +899,7 @@ async function run(push) {
   if (seq !== _runSeq) return;   // a newer run started while we waited
   if (m.mode && m.mode !== state.mode) { state.mode = m.mode; renderModeToggle(); }
   $("#sortnote").textContent = (SORTNOTE[m.mode] || SORTNOTE.lexical) +
-    (MATCHNOTE[m.matchMode] || "") + (m.ms != null ? " · " + m.ms + " ms" : "");
+    (m.ms != null ? " · " + m.ms + " ms" : "");
   const res = { total: m.total, page: m.page, page_size: PAGE_SIZE, results: m.results };
   renderResults(res);
   state.lastRes = res;
