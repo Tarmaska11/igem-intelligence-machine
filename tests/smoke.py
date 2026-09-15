@@ -183,10 +183,8 @@ def main():
         page.locator("#activeChipsTop .chip").first.click()
         page.wait_for_timeout(1500)
         check("tapping one clears it", page.locator("#activeChipsTop .chip").count() == 0)
-        # the nav button is hidden on a phone, so the page it opens has to be
-        # reachable from the footer instead
-        check("nav page reachable from the footer", page.locator(".footer-way").is_visible())
-        page.locator(".footer-way").click()
+        check("nav button offered on a phone", page.locator("#customBtn").is_visible())
+        page.locator("#customBtn").click()
         page.wait_for_timeout(2500)
         check("nav page opens on a phone", page.locator("#customView").is_visible())
 
@@ -202,8 +200,21 @@ def main():
                              ".map(s=>Math.round(s.getBoundingClientRect().top));"
                              "return [...new Set(ys)].length;}")
         check("figures fit on two lines", rows <= 2, rows)
-        check("the nav button stays out of the header",
-              not page.locator("#customBtn").is_visible())
+        lefts = page.evaluate("()=>[...document.querySelectorAll('.hero-stats .seg')]"
+                              ".map(s=>Math.round(s.getBoundingClientRect().left))")
+        check("figures start at the left margin", len(lefts) > 1 and lefts[0] == min(lefts), lefts)
+        # the name shares the first row with the nav button rather than sitting
+        # on top of an empty one
+        box = page.evaluate("()=>{const b=document.querySelector('.brand').getBoundingClientRect(),"
+                            "t=document.querySelector('#topbar').getBoundingClientRect();"
+                            "return [Math.round(b.top-t.top),Math.round(t.bottom-b.bottom)];}")
+        check("the name sits in the middle of the bar", abs(box[0] - box[1]) <= 2, box)
+        note = page.evaluate("()=>[...document.querySelectorAll('#footerNote .fsent')]"
+                             ".map(s=>Math.round(s.getBoundingClientRect().top))")
+        check("footer note on its own lines", len(note) == 2 and note[0] != note[1], note)
+        pairs = page.evaluate("()=>[...document.querySelectorAll('#footerLinks .footer-pair')]"
+                              ".map(s=>Math.round(s.getBoundingClientRect().top))")
+        check("each credit on its own line", len(pairs) == 2 and pairs[0] != pairs[1], pairs)
 
         check("no javascript errors in our own code", not errors, errors[:3])
         browser.close()
