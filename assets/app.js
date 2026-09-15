@@ -1065,17 +1065,12 @@ function applySite(site) {
   applyFooter(site.footer);
 }
 
-/* Each sentence gets its own element so a phone can put them on separate lines.
-   Old engines without lookbehind just keep the text in one piece. */
+/* Each sentence gets its own element so a phone can put them on separate lines. */
 function setNote(box, text) {
-  let parts;
-  try {
-    // built at runtime: an engine without lookbehind throws here instead of
-    // failing to parse the whole file
-    parts = String(text).split(new RegExp("(?<=\.)\s+")).filter(Boolean);
-  } catch (e) {
-    parts = [String(text)];
-  }
+  // split on sentence ends and put the full stop back on the piece it came from
+  const parts = String(text).split(". ")
+    .map((s, i, all) => (i < all.length - 1 ? s + "." : s))
+    .filter(Boolean);
   box.innerHTML = "";
   parts.forEach((sent, i) => {
     if (i) box.appendChild(document.createTextNode(" "));
