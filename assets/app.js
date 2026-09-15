@@ -298,14 +298,20 @@ function renderPager(data) {
 }
 
 function renderActiveChips() {
-  const box = $("#activeChips"); box.innerHTML = "";
+  // the second row sits above the results and only shows on a narrow screen,
+  // where the filter panel is off-canvas and you cannot see what is applied
+  const boxes = [$("#activeChips"), $("#activeChipsTop")];
+  boxes.forEach((b) => { if (b) b.innerHTML = ""; });
   for (const k in state.filters) for (const v of state.filters[k]) {
-    const chip = el("span", "chip");
-    chip.appendChild(el("span", "k", k));
-    chip.appendChild(document.createTextNode((state.labels[k] && state.labels[k][v]) || v));
-    chip.appendChild(el("span", "x", "✕"));
-    chip.onclick = () => { toggleFacet(k, v); };
-    box.appendChild(chip);
+    for (const box of boxes) {
+      if (!box) continue;
+      const chip = el("span", "chip");
+      chip.appendChild(el("span", "k", k));
+      chip.appendChild(document.createTextNode((state.labels[k] && state.labels[k][v]) || v));
+      chip.appendChild(el("span", "x", "✕"));
+      chip.onclick = () => { toggleFacet(k, v); };
+      box.appendChild(chip);
+    }
   }
 }
 

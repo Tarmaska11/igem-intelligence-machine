@@ -1055,6 +1055,16 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
      pushed the button off the screen */
   .header-search,.searchwrap,#q{min-width:0}
   #q{flex:1 1 0}
+}
+
+@media(max-width:380px){
   /* "Concept + Keyword" does not fit beside the nav buttons this narrow */
   .mode-tail{display:none}
+}
+
+/* the filter panel slides off-canvas on a phone, and the active filters live
+   inside it - so repeat them above the results where they can be seen */
+.chips-narrow{display:none}
+@media(max-width:880px){
+  .chips-narrow:not(:empty){display:flex;margin:0 0 14px}
 }
