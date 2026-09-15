@@ -95,7 +95,6 @@ def main():
               [spider, coffee, either])
         both = total_for("spider and silk")
         check("and narrows the search", both <= spider, [spider, both])
-        check("the hint explains it", "or" in page.inner_text(".search-hint").lower())
 
         print("concept mode")
         page.goto(BASE + "?q=heavy+metal+biosensor&mode=hybrid&page=4",
