@@ -36,7 +36,9 @@ const IMP_ICON = { core: "●", supporting: "◐", mentioned: "○", "": "·" };
 // the LSA model; without it only Keyword is offered.
 const MODES = [
   ["lexical", "Keyword", "Exact keyword matching (BM25), with a smart OR fallback for recall"],
-  ["hybrid",  "Concept + Keyword", "Keyword matches plus conceptually related teams"],
+  // the tail is split off so a narrow phone can drop it and still fit the
+  // switch next to the nav buttons
+  ["hybrid",  "Concept", "Keyword matches plus conceptually related teams", " + Keyword"],
 ];
 const DEFAULT_MODE = "lexical";
 
@@ -218,8 +220,9 @@ function renderModeToggle() {
   if (!state.semantic || !hasQuery()) { box.hidden = true; return; }
   box.hidden = false;
   box.innerHTML = "";
-  for (const [id, label, tip] of MODES) {
+  for (const [id, label, tip, tail] of MODES) {
     const b = el("button", "modebtn" + (state.mode === id ? " on" : ""), label);
+    if (tail) b.appendChild(el("span", "mode-tail", tail));
     b.title = tip;
     b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", state.mode === id ? "true" : "false");

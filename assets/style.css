@@ -1049,3 +1049,12 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   #topbar{padding:10px 13px 11px}
   #content{padding-left:13px;padding-right:13px}
 }
+
+@media(max-width:420px){
+  /* the search field would not shrink below its default 20-character size and
+     pushed the button off the screen */
+  .searchwrap,#q{min-width:0}
+  #q{flex:1 1 0}
+  /* "Concept + Keyword" does not fit beside the nav buttons this narrow */
+  .mode-tail{display:none}
+}
