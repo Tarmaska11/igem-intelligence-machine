@@ -1063,20 +1063,24 @@ function applySite(site) {
   }
   if (site.parts_button === true) $("#partsBtn").hidden = false;
   applyFooter(site.footer);
-  addFooterWay(nav);
 }
 
-/* The header button is hidden on a phone so the navbar stays one clean row,
-   so the page needs another way in - it joins the footer links. */
-function addFooterWay(nav) {
-  const box = $("#footerLinks");
-  if (!box) return;
-  const old = box.querySelector(".footer-way");
-  if (old) old.remove();
-  if (!nav.enabled || !nav.page) return;
-  const b = el("button", "footer-way", nav.label || "More");
-  b.onclick = () => openCustom(nav.page);
-  box.appendChild(b);
+/* Each sentence gets its own element so a phone can put them on separate lines.
+   Old engines without lookbehind just keep the text in one piece. */
+function setNote(box, text) {
+  let parts;
+  try {
+    // built at runtime: an engine without lookbehind throws here instead of
+    // failing to parse the whole file
+    parts = String(text).split(new RegExp("(?<=\.)\s+")).filter(Boolean);
+  } catch (e) {
+    parts = [String(text)];
+  }
+  box.innerHTML = "";
+  parts.forEach((sent, i) => {
+    if (i) box.appendChild(document.createTextNode(" "));
+    box.appendChild(el("span", "fsent", sent));
+  });
 }
 
 /* The footer ships with sensible text in the page, so it reads correctly with no
@@ -1084,7 +1088,7 @@ function addFooterWay(nav) {
 function applyFooter(f) {
   if (!f) return;
   if (f.enabled === false) { $("#siteFooter").hidden = true; return; }
-  if (typeof f.note === "string") $("#footerNote").textContent = f.note;
+  if (typeof f.note === "string") setNote($("#footerNote"), f.note);
   if (typeof f.legal === "string") $("#footerLegal").textContent = f.legal;
   if (typeof f.copyright === "string") $("#footerCopy").textContent = f.copyright;
   if (Array.isArray(f.links)) {

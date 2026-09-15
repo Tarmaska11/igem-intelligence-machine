@@ -1073,17 +1073,24 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
    Eleventh pass: four things that only went wrong on a phone.
    ===================================================================== */
 
-/* the nav button sat alone on its own header row, which read as a mistake.
-   On a phone it moves in with the other footer links instead. */
-.footer-way{display:none}
+/* the name and the nav button share the first row, so the name sits in the
+   middle of the bar instead of being pinned to the top of an empty one */
 @media(max-width:880px){
-  #customBtn{display:none}
-  .footer-way{display:inline;background:none;border:none;padding:0;cursor:pointer;
-    font-family:var(--sans);font-size:14px;color:var(--ink-dim)}
-  .footer-way:hover{color:var(--accent);text-decoration:underline}
+  .brand{flex:0 1 auto;min-width:0}
+  .wordmark{font-size:16.5px}
+  .navcluster{margin-left:auto}
+  #customBtn{padding:5px 10px;font-size:12.5px}
+  #topbar{align-items:center}
+
+  /* one line per credit, the way you would write them out */
+  .footer-pair{flex:1 1 100%}
+  .fsent{display:block}
 }
 
 @media(max-width:560px){
+  /* the figures read as a list, so they start at the left margin */
+  .hero-stats{justify-content:flex-start}
+
   /* every article title the same size, the way they are on a wide screen -
      the first card was still running at the desktop size */
   .post-card .post-title,.post-card + .post-card .post-title{font-size:23px;line-height:1.24}
