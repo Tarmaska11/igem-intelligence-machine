@@ -7,6 +7,7 @@
 Needs playwright (pip install playwright && playwright install chromium).
 Exits non-zero on the first failure, so CI can run it on every push.
 """
+import re
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -71,7 +72,57 @@ def main():
         check("search box moved to the header",
               page.locator("#headerSearch .searchwrap").count() == 1)
 
+        print("and / or in the search box")
+
+        def total_for(q):
+            page.goto(BASE + "?q=" + q.replace(" ", "+"), wait_until="domcontentloaded")
+            page.wait_for_function("()=>document.querySelectorAll('.card').length>0",
+                                   timeout=40000)
+            # the count is only this query's once the query itself shows up in it
+            last = q.split()[-1]
+            page.wait_for_function(
+                "w=>{const e=document.querySelector('#resultCount');"
+                "return e && e.textContent.toLowerCase().includes(w);}",
+                arg=last.lower(), timeout=30000)
+            return int(re.sub(r"[^0-9].*$", "", page.inner_text("#resultCount").strip()))
+
+        spider = total_for("spider")
+        coffee = total_for("coffee")
+        either = total_for("spider or coffee")
+        check("or widens the search", either > max(spider, coffee),
+              [spider, coffee, either])
+        check("or is not just concatenation", either <= spider + coffee,
+              [spider, coffee, either])
+        both = total_for("spider and silk")
+        check("and narrows the search", both <= spider, [spider, both])
+        check("the hint explains it", "or" in page.inner_text(".search-hint").lower())
+
+        print("concept mode")
+        page.goto(BASE + "?q=heavy+metal+biosensor&mode=hybrid&page=4",
+                  wait_until="domcontentloaded")
+        page.wait_for_function("()=>document.querySelectorAll('.card').length>0",
+                               timeout=40000)
+        page.wait_for_timeout(6000)
+        rel = page.locator(".card .needs-sum", has_text="related").count()
+        check("related projects are added", rel > 0, rel)
+        check("and are labelled as such", "related" in page.inner_text("#sortnote")
+              or rel > 0)
+
+        print("browse without a query")
+        # a facet on its own is a valid search - it used to throw in the worker
+        page.goto(BASE + "?year=2024", wait_until="domcontentloaded")
+        page.wait_for_function("()=>document.querySelectorAll('.card').length>0", timeout=40000)
+        page.wait_for_timeout(1500)
+        check("facet alone returns teams", page.locator(".card").count() > 0)
+        check("facet alone shows a count", "team" in page.inner_text("#resultCount"))
+        years = page.locator(".card .yr").all_inner_texts()
+        check("newest first", years == sorted(years, reverse=True), years[:5])
+
         print("filters")
+        page.goto(BASE + "?q=biosensor", wait_until="domcontentloaded")
+        page.wait_for_function("()=>document.querySelectorAll('.card').length>0", timeout=40000)
+        page.wait_for_selector(".facet-item", timeout=30000)
+        page.wait_for_timeout(4000)
         groups = [h.inner_text() for h in page.locator("#facetGroups h3").all()]
         check("facet groups present", len(groups) >= 6, groups)
         before = page.inner_text("#resultCount")
