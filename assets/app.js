@@ -239,9 +239,8 @@ const SORTNOTE = {
   hybrid:   "keyword matches first, then related projects",
 };
 
-// says how the words were combined, so a wide result set is not a surprise
+// explains a wider result set than the words asked for
 const MATCHNOTE = {
-  "any-of": " · matching any of your or groups",
   "any":    " · too few teams had every word, so any of them counts",
 };
 
