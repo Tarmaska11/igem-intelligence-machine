@@ -152,6 +152,13 @@ not written by hand. This matters when you read a record, so it is stated plainl
 MIT - see [LICENSE](LICENSE). The wiki content summarised here belongs to the respective
 iGEM teams.
 
+Third-party assets, all with their notices kept next to the files:
+
+| asset | source | licence |
+|---|---|---|
+| Merriweather, Inter (`assets/fonts/`) | Google Fonts | SIL Open Font License 1.1 - `assets/fonts/OFL.txt` |
+| microbiology mark + favicon | Google Material Symbols | Apache License 2.0 - `assets/ICON-LICENSE.txt` |
+
 ## Tests
 
 ```

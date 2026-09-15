@@ -44,6 +44,19 @@ def main():
         check("no results on the home page", page.locator("#results .card").count() == 0)
         check("search box is in the hero",
               page.locator("#heroSearch .searchwrap").count() == 1)
+        # the mark is an inline path, so "the element is there" proves nothing -
+        # an empty box passes that. Measure it and look for real path data.
+        mark = page.evaluate("""()=>{const s=document.querySelector('.brand .logo svg');
+            if(!s) return null; const r=s.getBoundingClientRect();
+            const p=s.querySelector('path');
+            return {w:r.width,h:r.height,d:(p&&p.getAttribute('d')||'').length};}""")
+        check("brand mark drawn", bool(mark) and mark["h"] > 10 and mark["w"] > 10
+              and mark["d"] > 100, mark)
+        check("favicon served as svg",
+              page.evaluate("""async()=>{const l=document.querySelector('link[rel=icon]');
+                  if(!l) return 'no link';
+                  const r=await fetch(l.href); return r.status+' '+r.headers.get('content-type');}""")
+              .startswith("200 image/svg+xml"))
 
         print("search")
         page.goto(BASE + "?q=biosensor", wait_until="domcontentloaded")

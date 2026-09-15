@@ -15,7 +15,7 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.dirname(HERE)
 
-ASSETS = ["assets/style.css", "assets/app.js", "assets/search.worker.js"]
+ASSETS = ["assets/style.css", "assets/app.js", "assets/search.worker.js", "assets/favicon.svg"]
 
 
 def digest(rel):
@@ -48,7 +48,7 @@ def main():
 
     p = os.path.join(SITE, "index.html")
     html = io.open(p, encoding="utf-8").read()
-    for rel in ("assets/style.css", "assets/app.js"):
+    for rel in ("assets/style.css", "assets/app.js", "assets/favicon.svg"):
         html = restamp(html, rel, vers[rel])
     io.open(p, "w", encoding="utf-8", newline="\n").write(html)
 

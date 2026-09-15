@@ -1,0 +1,9 @@
+Material Symbols
+Copyright Google LLC
+Licensed under the Apache License, Version 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+https://github.com/google/material-design-icons
+
+The "microbiology" glyph (outlined, weight 300) is used as the site mark in
+index.html and as assets/favicon.svg. The path data is embedded so the page
+needs no font download and keeps working with no network.
