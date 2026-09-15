@@ -987,13 +987,16 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   #facets{background:var(--bg);width:min(330px,88vw);padding:18px 16px 60px}
   .facets-head{margin-bottom:6px}
 
-  /* the header was four stacked rows before any content - brand and the
-     buttons share the first one now */
+  /* four stacked rows ate half the screen before any content. The name gets
+     its own row, then the buttons and the mode switch share one. */
   #topbar{padding:10px 16px 11px;gap:8px 10px}
-  .brand{flex:1 1 auto;min-width:0}
+  .brand{flex:1 1 100%;min-width:0}
   .wordmark{overflow:hidden;text-overflow:ellipsis}
-  .navcluster{gap:8px;flex:none}
+  .navcluster{order:2;margin-left:0;gap:8px;flex:none}
   .navlink{padding:6px 12px;font-size:13px}
+  #modeToggle{order:3;margin-left:auto;flex:0 1 auto;min-width:0}
+  .modebtn{padding:7px 10px;font-size:12px}
+  .header-search{order:4}
   .header-search .searchwrap{gap:8px}
 
   /* two columns at this width leaves both of them half empty */
@@ -1013,10 +1016,17 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .hero-stats{flex-basis:100%;gap:7px}
   .hero-stats .seg{flex:0 1 auto}
 
-  /* the embedded wiki collapsed to a sliver because it could shrink below
-     its own height; give it a real one on a phone */
-  .wiki-stage{height:auto;flex:none}
-  .wiki-frame,.wiki-text{flex:none;height:58vh;min-height:320px}
+  /* The drawer is built as nested flex boxes that scroll inside themselves,
+     which is right on a desktop and wrong on a phone - the wiki frame got
+     squeezed to a sliver and the chat drew on top of it. Drop the whole
+     thing back to normal document flow and let the panel scroll. */
+  .dpane.workspace-pane.on{display:block}
+  .workspace{display:block;overflow:visible;height:auto}
+  .wiki-col,.wiki-stage{display:block;height:auto;min-height:0}
+  .wiki-frame,.wiki-text{display:block;width:100%;height:56vh;min-height:300px;flex:none}
+  .wiki-text{overflow:auto}
+  .ai-col{display:block;overflow:visible;margin-top:16px}
+  .ai-col .ai-log{display:flex;overflow:visible}
   .ai-form{flex-wrap:wrap}
   .ai-q{flex:1 1 100%}
   .ai-send{margin-left:auto}
@@ -1024,4 +1034,12 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 
   .dh h2{font-size:23px}
   #content{padding-bottom:34px}
+}
+
+@media(max-width:400px){
+  /* the two mode labels plus both nav buttons only just fit on one row here */
+  .navlink{padding:6px 10px;font-size:12.5px}
+  .modebtn{padding:7px 8px;font-size:11.5px}
+  #topbar{padding:10px 13px 11px}
+  #content{padding-left:13px;padding-right:13px}
 }
