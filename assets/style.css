@@ -1003,10 +1003,16 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .results-head{display:block}
   .results-head .sortnote{display:block;margin:5px 0 0}
 
-  /* the wiki toolbar ran the "open in new tab" button off the screen */
+  /* the wiki toolbar ran the "open in new tab" button off the screen; the url
+     drops to its own line and the two controls share the first one */
   .wiki-bar{flex-wrap:wrap;gap:8px}
   .wiki-url{flex:1 1 100%;order:3}
-  .wiki-open{margin-left:auto}
+  .wiki-open{margin-left:auto;padding:5px 11px;font-size:12px}
+  .wiki-mode{padding:5px 9px;font-size:12px}
+
+  /* on the home page the mode switch is hidden, so the buttons would be left
+     stranded on the left of an otherwise empty row */
+  #topbar:not(:has(#modeToggle:not([hidden]))) .navcluster{margin-left:auto}
 }
 
 @media(max-width:560px){

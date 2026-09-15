@@ -399,7 +399,10 @@ async function openTeam(id) {
 function buildDetails(p, t) {
   const meta = el("div", "dmeta");
   if (t.application_domain) meta.appendChild(el("span", null, t.application_domain));
-  if (t.track) meta.appendChild(el("span", null, "track: " + t.track));
+  // the track and the domain are often the same word - saying it twice reads as a bug
+  if (t.track && t.track !== t.application_domain) {
+    meta.appendChild(el("span", null, "track: " + t.track));
+  }
   if (t.f && t.f.country) {
     meta.appendChild(el("span", null, t.f.country[0] + (t.city ? " · " + t.city : "")));
   }
