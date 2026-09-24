@@ -2,8 +2,6 @@
 /* Search runs here so typing never freezes the page. */
 
 const K1 = 3, B = 0.55;
-// the wiki arm scores whole pages, so it keeps the usual BM25 settings
-const WK1 = 1.2, WB = 0.75;
 const TOKEN = /[a-z0-9]{2,32}/g;
 const ABBREV = /\b([a-z])\.\s*([a-z]{3,})\b/g;
 const COMPOUND = /[a-z0-9]+(?:[-_][a-z0-9]+)+/g;
@@ -231,6 +229,7 @@ function parseQuery(q) {
       const gi = GROUP_OF.get(phrase);
       if (gi !== undefined) {
         units.push(SYNONYMS[gi].map((f) => ({ w: f.split(" "), m: 1 })));
+        units[units.length - 1].label = phrase;
         i += len;
         matched = true;
       }
@@ -241,6 +240,7 @@ function parseQuery(q) {
         const g = spellingsFor(w);
         units.push(g ? g.map((f, n) => ({ w: [f], m: n ? FOLD_WEIGHT : 1 }))
                      : [{ w: [w], m: 1 }]);
+        units[units.length - 1].label = w;
       }
       i++;
     }
@@ -478,7 +478,14 @@ async function loadShard(term) {
 }
 
 /* The raw-wiki recall arm. A team whose summary missed the word but whose wiki
-   contains it still turns up, ranked below every summary hit - same as before. */
+   contains it still turns up, below every summary hit.
+
+   These are ordered by how many times the words turn up, not by BM25. BM25 is built
+   for density, and on whole wikis that put a 500-word stub with two mentions above
+   a full wiki with seventy. Plurals and synonyms of a word are added together, with
+   no discount for the form you did not type. With several words the order follows
+   the rarest one, so 200 "silk" and 1 "spider" does not top "spider silk". Ties go
+   to the shorter wiki. The number shown on the card is the number sorted on. */
 async function wikiTail(units, allow, primary) {
   if (!ftBase || !units.length) return [];
   const wanted = new Set();
@@ -486,8 +493,7 @@ async function wikiTail(units, allow, primary) {
   const shards = new Map();
   await Promise.all(Array.from(wanted).map(async (w) => { shards.set(w, await loadShard(w)); }));
   const wmeta = await loadWikiMeta();
-  const NW = (wmeta && wmeta.docs) || CARDS.length;
-  const wdl = wmeta && wmeta.dl, wavg = wmeta && wmeta.avgdl;
+  const wdl = wmeta && wmeta.dl;
 
   const listOf = (w) => {
     const sh = shards.get(w);
@@ -500,10 +506,11 @@ async function wikiTail(units, allow, primary) {
     return { ids, tfs };
   };
 
-  // one score map per unit, OR-ing its spellings
-  const perUnit = [], hits = [];
+  // mentions per team for each unit, adding up its spellings; a spelling of
+  // several words counts as often as its least used word
+  const perUnit = [];
   for (const unit of units) {
-    const acc = new Map(), hit = new Map();
+    const hit = new Map();
     for (const sp of unit) {
       const lists = [];
       let ok = true;
@@ -517,7 +524,7 @@ async function wikiTail(units, allow, primary) {
       const base = lists[0];
       for (let i = 0; i < base.ids.length; i++) {
         const id = base.ids[i];
-        let score = 0, present = true, n = Infinity;
+        let n = Infinity;
         for (const l of lists) {
           let lo = 0, hi = l.ids.length - 1, at = -1;
           while (lo <= hi) {
@@ -525,56 +532,51 @@ async function wikiTail(units, allow, primary) {
             if (l.ids[mid] === id) { at = mid; break; }
             if (l.ids[mid] < id) lo = mid + 1; else hi = mid - 1;
           }
-          if (at < 0) { present = false; break; }
-          const wdf = l.ids.length, wtf = l.tfs[at];
-          n = Math.min(n, wtf);
-          const widf = Math.log(1 + (NW - wdf + 0.5) / (wdf + 0.5));
-          score += wdl
-            ? widf * (wtf * (WK1 + 1)) / (wtf + WK1 * (1 - WB + WB * wdl[id] / wavg))
-            : Math.log(1 + wtf) * Math.log(1 + NW / wdf);
+          if (at < 0) { n = 0; break; }
+          n = Math.min(n, l.tfs[at]);
         }
-        if (present) {
-          acc.set(id, Math.max(acc.get(id) || 0, score * sp.m));
-          hit.set(id, Math.max(hit.get(id) || 0, n));
-        }
+        if (n) hit.set(id, (hit.get(id) || 0) + n);
       }
     }
-    perUnit.push(acc); hits.push(hit);
+    perUnit.push(hit);
   }
   if (!perUnit.length) return [];
 
   let ids = null;
-  for (const acc of perUnit) {
-    if (ids === null) ids = new Set(acc.keys());
-    else for (const id of Array.from(ids)) if (!acc.has(id)) ids.delete(id);
+  for (const hit of perUnit) {
+    if (ids === null) ids = new Set(hit.keys());
+    else for (const id of Array.from(ids)) if (!hit.has(id)) ids.delete(id);
   }
 
   const out = [];
   for (const id of (ids || [])) {
     if (primary.has(id)) continue;
     if (allow && !allow.has(id)) continue;
-    let s = 0, n = 0;
-    for (const acc of perUnit) s += acc.get(id) || 0;
-    for (const hit of hits) n += hit.get(id) || 0;
-    out.push([id, s, n]);
+    const parts = perUnit.map((hit, u) => [units[u].label || units[u][0].w.join(" "), hit.get(id)]);
+    let n = Infinity, sum = 0;
+    for (const [, c] of parts) { n = Math.min(n, c); sum += c; }
+    out.push({ id, n, sum, len: wdl ? wdl[id] : 0, parts });
   }
-  out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  out.sort(byMentions);
   return out;
 }
 
-/* Same grouping as runGroups, on the wiki arm. Also hands back how many
-   times the words turn up in each team's wiki. */
+function byMentions(a, b) {
+  return b.n - a.n || b.sum - a.sum || a.len - b.len || a.id - b.id;
+}
+
+/* Same grouping as runGroups, on the wiki arm. A team found by two groups keeps
+   whichever group mentions it more. */
 async function wikiTailGroups(groups, allow, primary) {
-  const best = new Map(), count = new Map();
+  const best = new Map();
   for (const units of groups) {
-    for (const [id, s, n] of await wikiTail(units, allow, primary)) {
-      best.set(id, Math.max(best.get(id) || 0, s));
-      count.set(id, Math.max(count.get(id) || 0, n));
+    for (const x of await wikiTail(units, allow, primary)) {
+      const had = best.get(x.id);
+      if (!had || byMentions(x, had) < 0) best.set(x.id, x);
     }
   }
-  const out = Array.from(best);
-  out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  return { ids: out.map((x) => x[0]), count };
+  const out = Array.from(best.values()).sort(byMentions);
+  return { ids: out.map((x) => x.id), count: new Map(out.map((x) => [x.id, x])) };
 }
 
 /* Must match shard_of() in pipeline/build.py. */
@@ -799,7 +801,12 @@ self.onmessage = async (ev) => {
     const results = slice.map((i) => {
       const c = CARDS[i];
       const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
-      if (wikiOnly.has(i)) { r.wiki_only = true; r.wiki_hits = wikiCount.get(i) || 0; }
+      if (wikiOnly.has(i)) {
+        const h = wikiCount.get(i);
+        r.wiki_only = true;
+        r.wiki_hits = h ? h.n : 0;
+        if (h && h.parts.length > 1) r.wiki_parts = h.parts;
+      }
       if (relatedOnly.has(i)) r.related = true;
       return r;
     });
