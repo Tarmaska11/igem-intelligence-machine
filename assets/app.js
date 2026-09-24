@@ -276,7 +276,11 @@ function renderResults(data) {
     }
     c.appendChild(top);
     if (r.wiki_only && r.wiki_hits) {
-      const m = el("div", "wiki-hits", `Matched: ${r.wiki_hits} ${r.wiki_hits === 1 ? "time" : "times"}.`);
+      const times = (n) => n + (n === 1 ? " time" : " times");
+      const text = r.wiki_parts
+        ? "Matched: " + r.wiki_parts.map(([w, n]) => `${w} ${times(n)}`).join(" · ") + "."
+        : `Matched: ${times(r.wiki_hits)}.`;
+      const m = el("div", "wiki-hits", text);
       m.title = "How many times your words turn up in this team's wiki text.";
       c.appendChild(m);
     }

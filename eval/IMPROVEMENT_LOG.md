@@ -264,6 +264,56 @@ Concept mode. Do not read a future cycle's morph number against the ones above.
 
 ---
 
+## Cycle 13 — the wiki block is ordered by mentions
+
+**A product decision, measured, with its cost.**
+
+Below the starred summary hits, the wiki-only teams were ordered by BM25 (k1 1.2,
+b 0.75), and a plural you did not type counted at 0.35. On whole wikis that read as
+random: for `spiders`, SCUT-China_B 2017 (539 words, 2 mentions) sat at #36 and
+XJTLU-Software 2024 (93k words, 70 mentions) at #59, and the "Matched: N times" line
+went up on a third of the steps down the list. The owner asked for the order to
+follow the number on the card.
+
+Now: plural forms and synonyms are added together with no discount, teams are sorted
+by that count, ties go to the shorter wiki, and the card shows the number sorted on.
+With several words the order follows the least-mentioned word, and the card lists
+each one ("spider 76 times · silk 255 times").
+
+**New instrument, `eval/wikiorder.js`.** 150 one-word and 50 two-word queries mined
+from the summaries. The label is the summary: the teams whose summary has every word
+are the ones really about it, and the wiki arm is run with nothing held back to see
+where it puts them. The summaries were written from the wikis, so the label, if
+anything, favours raw counts.
+
+| | BM25 (before) | count, rarest word | count, words added |
+|---|---|---|---|
+| nDCG@10 | **0.349** | 0.314 | 0.300 |
+| nDCG@50 | **0.415** | 0.371 | 0.361 |
+| MAP | **0.282** | 0.245 | 0.233 |
+| one word, nDCG@10 | **0.378** | 0.353 | 0.353 |
+| two words, nDCG@10 | **0.258** | 0.192 | 0.136 |
+| count goes up down the list | 34.5% | **0%** | **0%** |
+| wiki arm, median / p95 ms | 19.6 / 72 | 17.5 / 47 | 16.6 / 53 |
+
+A random order scores 0.075 on the same precision scale. The drop is real: length
+normalisation was helping, because a long wiki collects mentions in its reference
+list (most of XJTLU-Software's 70 are citations and one web crawler). Two-word
+queries lose most, 19 worse and 5 better, mainly where one word is common. Adding
+the counts was worse than following the rarest word, so the rarest word shipped.
+The other sets with the wiki arm on did not move beyond facet-cohere MRR
+0.8461 -> 0.8444.
+
+A multi-word synonym ("ribosome binding site") is counted as its least used word,
+which is an upper bound, not a phrase count.
+
+If the relevance is wanted back without losing an order you can read: sort and label
+by density ("12 per 10k words") with a floor on wiki length so stubs do not return.
+
+**SHIPPED** (by decision, not by metric).
+
+---
+
 ## Where it ended up
 
 | set | arm | start | end |
