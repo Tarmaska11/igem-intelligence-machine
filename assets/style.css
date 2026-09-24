@@ -880,6 +880,7 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .card-top{align-items:baseline;gap:10px}
 .card-top .name{font-family:var(--serif);font-size:20px;font-weight:700;color:var(--ink)}
 .card-top .sum-star{color:var(--amber);font-size:16px;margin-right:-4px}
+.card .wiki-hits{font-family:var(--sans);font-size:12.5px;color:var(--ink-faint);margin-top:3px}
 .card-top .year{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink-faint)}
 .card-top .domain{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;
   text-transform:uppercase;color:var(--accent);border:none;background:transparent;padding:0}
