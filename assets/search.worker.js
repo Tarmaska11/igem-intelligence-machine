@@ -501,9 +501,9 @@ async function wikiTail(units, allow, primary) {
   };
 
   // one score map per unit, OR-ing its spellings
-  const perUnit = [];
+  const perUnit = [], hits = [];
   for (const unit of units) {
-    const acc = new Map();
+    const acc = new Map(), hit = new Map();
     for (const sp of unit) {
       const lists = [];
       let ok = true;
@@ -517,7 +517,7 @@ async function wikiTail(units, allow, primary) {
       const base = lists[0];
       for (let i = 0; i < base.ids.length; i++) {
         const id = base.ids[i];
-        let score = 0, present = true;
+        let score = 0, present = true, n = Infinity;
         for (const l of lists) {
           let lo = 0, hi = l.ids.length - 1, at = -1;
           while (lo <= hi) {
@@ -527,15 +527,19 @@ async function wikiTail(units, allow, primary) {
           }
           if (at < 0) { present = false; break; }
           const wdf = l.ids.length, wtf = l.tfs[at];
+          n = Math.min(n, wtf);
           const widf = Math.log(1 + (NW - wdf + 0.5) / (wdf + 0.5));
           score += wdl
             ? widf * (wtf * (WK1 + 1)) / (wtf + WK1 * (1 - WB + WB * wdl[id] / wavg))
             : Math.log(1 + wtf) * Math.log(1 + NW / wdf);
         }
-        if (present) acc.set(id, Math.max(acc.get(id) || 0, score * sp.m));
+        if (present) {
+          acc.set(id, Math.max(acc.get(id) || 0, score * sp.m));
+          hit.set(id, Math.max(hit.get(id) || 0, n));
+        }
       }
     }
-    perUnit.push(acc);
+    perUnit.push(acc); hits.push(hit);
   }
   if (!perUnit.length) return [];
 
@@ -549,28 +553,28 @@ async function wikiTail(units, allow, primary) {
   for (const id of (ids || [])) {
     if (primary.has(id)) continue;
     if (allow && !allow.has(id)) continue;
-    let s = 0;
+    let s = 0, n = 0;
     for (const acc of perUnit) s += acc.get(id) || 0;
-    out.push([id, s]);
+    for (const hit of hits) n += hit.get(id) || 0;
+    out.push([id, s, n]);
   }
   out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
   return out;
 }
 
-/* Same grouping as runGroups, on the wiki arm. */
+/* Same grouping as runGroups, on the wiki arm. Also hands back how many
+   times the words turn up in each team's wiki. */
 async function wikiTailGroups(groups, allow, primary) {
-  if (groups.length === 1) {
-    return (await wikiTail(groups[0], allow, primary)).map((x) => x[0]);
-  }
-  const best = new Map();
+  const best = new Map(), count = new Map();
   for (const units of groups) {
-    for (const [id, s] of await wikiTail(units, allow, primary)) {
+    for (const [id, s, n] of await wikiTail(units, allow, primary)) {
       best.set(id, Math.max(best.get(id) || 0, s));
+      count.set(id, Math.max(count.get(id) || 0, n));
     }
   }
   const out = Array.from(best);
   out.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  return out.map((x) => x[0]);
+  return { ids: out.map((x) => x[0]), count };
 }
 
 /* Must match shard_of() in pipeline/build.py. */
@@ -748,7 +752,7 @@ self.onmessage = async (ev) => {
     const allow = allowedByFilters(msg.filters);
     const groups = parseGroups(msg.q);
     const units = groups.length === 1 ? groups[0] : [];
-    let ids, scores = null, matchMode = null, wikiOnly = new Set(),
+    let ids, scores = null, matchMode = null, wikiOnly = new Set(), wikiCount = new Map(),
         relatedOnly = new Set(), usedMode = "lexical";
 
     if (!groups.length) {
@@ -772,8 +776,9 @@ self.onmessage = async (ev) => {
         }
       }
       const tail = await wikiTailGroups(groups, allow, primary);
-      wikiOnly = new Set(tail);
-      ids = ids.concat(tail);
+      wikiOnly = new Set(tail.ids);
+      wikiCount = tail.count;
+      ids = ids.concat(tail.ids);
     }
 
     // the eval harness wants the whole ranking, not a page of cards
@@ -794,7 +799,7 @@ self.onmessage = async (ev) => {
     const results = slice.map((i) => {
       const c = CARDS[i];
       const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
-      if (wikiOnly.has(i)) r.wiki_only = true;
+      if (wikiOnly.has(i)) { r.wiki_only = true; r.wiki_hits = wikiCount.get(i) || 0; }
       if (relatedOnly.has(i)) r.related = true;
       return r;
     });

@@ -275,6 +275,11 @@ function renderResults(data) {
       top.appendChild(b);
     }
     c.appendChild(top);
+    if (r.wiki_only && r.wiki_hits) {
+      const m = el("div", "wiki-hits", `Matched: ${r.wiki_hits} ${r.wiki_hits === 1 ? "time" : "times"}.`);
+      m.title = "How many times your words turn up in this team's wiki text.";
+      c.appendChild(m);
+    }
     if (r.related) {
       const b = el("span", "needs-sum", "related");
       b.title = "Not a keyword match - this project reads as being about the same thing.";
