@@ -261,6 +261,11 @@ function renderResults(data) {
     c.dataset.id = r.id;
     c.onclick = () => openTeam(r.id);
     const top = el("div", "card-top");
+    if (state.q && !r.wiki_only && !r.related) {
+      const s = el("span", "sum-star", "★");
+      s.title = "Your words are in this team's summary.";
+      top.appendChild(s);
+    }
     top.appendChild(el("span", "name", r.team_name));
     top.appendChild(el("span", "year", r.year || ""));
     if (r.domain) top.appendChild(el("span", "domain", r.domain));
@@ -270,11 +275,6 @@ function renderResults(data) {
       top.appendChild(b);
     }
     c.appendChild(top);
-    if (r.wiki_only) {
-      const b = el("span", "needs-sum", "wiki text match");
-      b.title = "The summary does not mention your words, but this team's wiki does.";
-      top.appendChild(b);
-    }
     if (r.related) {
       const b = el("span", "needs-sum", "related");
       b.title = "Not a keyword match - this project reads as being about the same thing.";
