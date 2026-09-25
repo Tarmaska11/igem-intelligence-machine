@@ -412,10 +412,59 @@ function allowedByFilters(filters) {
   return allow;
 }
 
-function facetCounts(resultIds) {
-  const set = resultIds instanceof Set ? resultIds : new Set(resultIds);
+/* Every id that matches the query inside the allowed set, best first. */
+async function rank(msg, groups, allow) {
+  let ids, scores = null, matchMode = null, wikiOnly = new Set(), wikiCount = new Map(),
+      relatedOnly = new Set(), usedMode = "lexical";
+
+  if (!groups.length) {
+    ids = allow ? Array.from(allow) : CARDS.map((_, i) => i);
+    ids.sort((a, b) => (CARDS[b].year - CARDS[a].year) ||
+                       CARDS[a].team_name.localeCompare(CARDS[b].team_name));
+  } else {
+    const res = runGroups(groups, allow);
+    scores = res.scored;
+    matchMode = res.mode;
+    ids = scores.map((s) => s[0]);
+    let primary = new Set(ids);
+    if (msg.mode === "hybrid" && LSA) {
+      const sem = semanticScores(msg.q);
+      if (sem) {
+        const related = conceptTail(ids, sem, allow, primary);
+        relatedOnly = new Set(related);
+        ids = ids.concat(related);
+        primary = new Set(ids);
+        usedMode = "hybrid";
+      }
+    }
+    const tail = await wikiTailGroups(groups, allow, primary);
+    wikiOnly = new Set(tail.ids);
+    wikiCount = tail.count;
+    ids = ids.concat(tail.ids);
+  }
+  return { ids, matchMode, usedMode, wikiOnly, wikiCount, relatedOnly };
+}
+
+/* A section with something ticked counts against the other sections' filters
+   only. Otherwise ticking 2024 would hide every other year, and you could never
+   pick a second one. */
+async function ownFilterPools(msg, groups) {
+  const pools = {};
+  const f = msg.filters || {};
+  for (const kind of Object.keys(f)) {
+    if (!f[kind] || !f[kind].length) continue;
+    const others = Object.assign({}, f);
+    delete others[kind];
+    pools[kind] = (await rank(msg, groups, allowedByFilters(others))).ids;
+  }
+  return pools;
+}
+
+function facetCounts(resultIds, pools) {
+  const all = resultIds instanceof Set ? resultIds : new Set(resultIds);
   const out = {};
   for (const kind of Object.keys(FACETS)) {
+    const set = pools && pools[kind] ? new Set(pools[kind]) : all;
     const rows = [];
     for (const item of FACETS[kind]) {
       let n = 0;
@@ -753,35 +802,8 @@ self.onmessage = async (ev) => {
     const t0 = performance.now();
     const allow = allowedByFilters(msg.filters);
     const groups = parseGroups(msg.q);
-    const units = groups.length === 1 ? groups[0] : [];
-    let ids, scores = null, matchMode = null, wikiOnly = new Set(), wikiCount = new Map(),
-        relatedOnly = new Set(), usedMode = "lexical";
-
-    if (!groups.length) {
-      ids = allow ? Array.from(allow) : CARDS.map((_, i) => i);
-      ids.sort((a, b) => (CARDS[b].year - CARDS[a].year) ||
-                         CARDS[a].team_name.localeCompare(CARDS[b].team_name));
-    } else {
-      const res = runGroups(groups, allow);
-      scores = res.scored;
-      matchMode = res.mode;
-      ids = scores.map((s) => s[0]);
-      let primary = new Set(ids);
-      if (msg.mode === "hybrid" && LSA) {
-        const sem = semanticScores(msg.q);
-        if (sem) {
-          const related = conceptTail(ids, sem, allow, primary);
-          relatedOnly = new Set(related);
-          ids = ids.concat(related);
-          primary = new Set(ids);
-          usedMode = "hybrid";
-        }
-      }
-      const tail = await wikiTailGroups(groups, allow, primary);
-      wikiOnly = new Set(tail.ids);
-      wikiCount = tail.count;
-      ids = ids.concat(tail.ids);
-    }
+    const { ids, matchMode, usedMode, wikiOnly, wikiCount, relatedOnly } =
+      await rank(msg, groups, allow);
 
     // the eval harness wants the whole ranking, not a page of cards
     if (msg.idsOnly) {
@@ -819,7 +841,7 @@ self.onmessage = async (ev) => {
       matchMode: matchMode,
       ms: Math.round(performance.now() - t0),
       results: results,
-      facets: facetCounts(ids),
+      facets: facetCounts(ids, await ownFilterPools(msg, groups)),
     });
   }
 };

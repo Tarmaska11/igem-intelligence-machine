@@ -16,19 +16,21 @@ const DATA_SCHEMA = 2;
 const REMOTE_TIMEOUT = 6000;
 const PAGE_SIZE = 20;
 
+// The first four are what people actually filter by; the rest wait behind
+// "More filters". "track" is the village column of the iGEM team lists.
 const FACET_KINDS = [
-  ["molecule",  "Target molecule"],
+  ["section",   "Team section"],
+  ["year",      "Year"],
+  ["track",     "Village"],
   ["chassis",   "Chassis organism"],
+  ["molecule",  "Target molecule"],
   ["technique", "Molecular technique"],
   ["part",      "Biological part"],
   ["domain",    "Application domain"],
-  ["track",     "Track"],
-  ["year",      "Year"],
   ["region",    "Region"],
   ["country",   "Country"],
-  ["section",   "Team section"],
-  ["failures",  "Documented failures"],
 ];
+const MAIN_FACETS = 4;
 const IMP_ICON = { core: "●", supporting: "◐", mentioned: "○", "": "·" };
 
 // Two search modes: Keyword (default, exact term matching) and Concept + Keyword
@@ -57,6 +59,7 @@ const state = {
   fulltextBases: null,  // set only once a database repo has been accepted
   meta: null,
   posts: [],
+  moreFilters: false,   // the "More filters" block is open
 };
 
 const $ = (s) => document.querySelector(s);
@@ -334,9 +337,12 @@ const FACET_SHOW = 14;
 function renderFacets(data) {
   const wrap = $("#facetGroups"); wrap.innerHTML = "";
   const kinds = data.kinds || {};
-  for (const [kind, label] of FACET_KINDS) {
+  const more = el("div", "facet-extra");
+  // a filter that is switched on is never tucked out of sight
+  const extraOn = FACET_KINDS.slice(MAIN_FACETS).some(([k]) => state.filters[k]);
+  FACET_KINDS.forEach(([kind, label], n) => {
     const items = kinds[kind];
-    if (!items || !items.length) continue;
+    if (!items || !items.length) return;
     state.labels[kind] = state.labels[kind] || {};
     const g = el("div", "facet-group");
     const h = el("h3"); h.appendChild(el("span", null, label));
@@ -366,8 +372,20 @@ function renderFacets(data) {
     };
     paint();
     g.appendChild(list);
-    wrap.appendChild(g);
-  }
+    (n < MAIN_FACETS ? wrap : more).appendChild(g);
+  });
+  if (!more.children.length) return;
+  const open = state.moreFilters || extraOn;
+  const btn = el("button", "facet-toggle", open ? "Fewer filters" : "More filters");
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  more.hidden = !open;
+  btn.onclick = () => {
+    state.moreFilters = more.hidden;
+    more.hidden = !more.hidden;
+    btn.textContent = more.hidden ? "More filters" : "Fewer filters";
+    btn.setAttribute("aria-expanded", more.hidden ? "false" : "true");
+  };
+  wrap.append(btn, more);
 }
 
 function toggleFacet(kind, key) {

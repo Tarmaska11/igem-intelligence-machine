@@ -1,10 +1,10 @@
 The fonts in this folder are used under the SIL Open Font License, Version 1.1.
 
-  Merriweather (upright and italic) - Copyright 2016 The Merriweather Project Authors
-  (https://github.com/SorkinType/Merriweather)
+  Literata - Copyright 2017 The Literata Project Authors
+  (https://github.com/googlefonts/literata)
 
-  Inter - Copyright 2016-2024 The Inter Project Authors
-  (https://github.com/rsms/inter)
+  Nunito Sans - Copyright 2016 The Nunito Sans Project Authors
+  (https://github.com/Fonthausen/NunitoSans)
 
 Both are licensed under the SIL Open Font License, Version 1.1, available at
 https://scripts.sil.org/OFL

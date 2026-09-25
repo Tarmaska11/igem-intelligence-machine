@@ -124,6 +124,23 @@ def main():
         page.wait_for_timeout(4000)
         groups = [h.inner_text() for h in page.locator("#facetGroups h3").all()]
         check("facet groups present", len(groups) >= 6, groups)
+        shown = [h.inner_text() for h in page.locator("#facetGroups h3").all() if h.is_visible()]
+        check("main filters first, in order",
+              shown == ["Team section", "Year", "Village", "Chassis organism"], shown)
+        check("no documented-failures filter", not any("failure" in g.lower() for g in groups), groups)
+        page.locator(".facet-toggle").click()
+        page.wait_for_timeout(300)
+        check("More filters shows the rest",
+              sum(1 for h in page.locator("#facetGroups h3").all() if h.is_visible()) > 4)
+        page.locator(".facet-toggle").click()
+        yr = page.locator(".facet-group", has=page.locator("h3", has_text="Year"))
+        yr.locator(".facet-item").nth(0).click()
+        page.wait_for_timeout(1500)
+        yr.locator(".facet-item:not(.on)").nth(0).click()
+        page.wait_for_timeout(1500)
+        check("two options in one section", yr.locator(".facet-item.on").count() == 2)
+        page.locator("#clearFilters").click()
+        page.wait_for_timeout(900)
         before = page.inner_text("#resultCount")
         page.locator(".facet-item").first.click()
         page.wait_for_timeout(1200)

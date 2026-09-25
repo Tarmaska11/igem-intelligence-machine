@@ -262,3 +262,47 @@ def canon(kind, raw):
         if rx.search(n):
             return label
     return _title(n)
+
+
+# iGEM's own 15 villages (villages.igem.org). The team lists use the same
+# column for the tracks teams chose before villages existed, so those are
+# folded into the village they became; the vague ones go by the project's
+# own application domain, and get no village if that says nothing either.
+VILLAGES = {
+    "Agriculture", "Art & Design", "Biomanufacturing", "Bioremediation",
+    "Climate Crisis", "Conservation", "Diagnostics", "Fashion & Cosmetics",
+    "Food & Nutrition", "Foundational Advance", "Infectious Diseases",
+    "Oncology", "Software & AI", "Space", "Therapeutics",
+}
+OLD_TRACK = {
+    "Health & Medicine": "Therapeutics",
+    "Manufacturing": "Biomanufacturing",
+    "Software": "Software & AI",
+    "Energy": "Climate Crisis",
+    "Information Processing": "Foundational Advance",
+    "Measurement": "Foundational Advance",
+    "Hardware": "Foundational Advance",
+    "Microfluidics": "Foundational Advance",
+}
+DOMAIN_VILLAGE = {
+    "Diagnostics": "Diagnostics",
+    "Biosensors": "Diagnostics",
+    "Biomanufacturing": "Biomanufacturing",
+    "Biomaterials": "Biomanufacturing",
+    "Bioremediation": "Bioremediation",
+    "Therapeutics": "Therapeutics",
+    "Foundational tools": "Foundational Advance",
+    "Synthetic biology": "Foundational Advance",
+    "Agriculture & food": "Agriculture",
+    "Energy": "Climate Crisis",
+}
+
+
+def village(raw, domain):
+    """The official village for a team's track or village, or "" if none fits."""
+    v = (raw or "").strip()
+    if v in VILLAGES:
+        return v
+    if v in OLD_TRACK:
+        return OLD_TRACK[v]
+    return DOMAIN_VILLAGE.get(domain or "", "")

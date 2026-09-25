@@ -247,6 +247,10 @@ def build_records(seen, td, qa):
                 if v:
                     facets[kind] = [canon.label_meta(kind, v)]
             rec["city"] = row.get("city") or ""
+        # only iGEM's official villages; older tracks are folded into the one they became
+        if facets.get("track"):
+            vil = canon.village(facets["track"][0], (facets.get("domain") or [""])[0])
+            facets["track"] = [vil] if vil else []
         facets["year"] = [str(year)]
         if rec["fm"]:
             facets["failures"] = ["Documents failures"]
