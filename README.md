@@ -156,7 +156,7 @@ Third-party assets, all with their notices kept next to the files:
 
 | asset | source | licence |
 |---|---|---|
-| Merriweather, Inter (`assets/fonts/`) | Google Fonts | SIL Open Font License 1.1 - `assets/fonts/OFL.txt` |
+| Literata, Nunito Sans (`assets/fonts/`) | Google Fonts | SIL Open Font License 1.1 - `assets/fonts/OFL.txt` |
 | microbiology mark + favicon | Google Material Symbols | Apache License 2.0 - `assets/ICON-LICENSE.txt` |
 
 ## Tests
