@@ -155,7 +155,7 @@ function askWorker(msg) {
 
 function startWorker(data) {
   if (worker) worker.terminate();
-  worker = new Worker("assets/search.worker.js?v=8629a4a5");
+  worker = new Worker("assets/search.worker.js?v=93fe4ef5");
   worker.onmessage = (ev) => {
     const m = ev.data;
     const done = _pending.get(m.seq);
@@ -222,15 +222,17 @@ function setMode() {
   $("#modeToggle").hidden = !(active && state.semantic);
 }
 
-/* On a wide screen the filter column sits beside the results and the ☰ button
-   puts it away; on a phone it is a slide-in panel with its own Filters button. */
+/* On a wide screen the filter column sits beside the results, and its ☰ button
+   folds it down to a narrow strip; on a phone it is a slide-in panel with its
+   own Filters button. */
 function showFilters() {
   const active = hasQuery();
   const narrow = isNarrow();
-  $("#facets").hidden = !active ||
-    (narrow ? !$("#facets").classList.contains("open") : state.filtersHidden);
+  const f = $("#facets");
+  f.hidden = !active || (narrow && !f.classList.contains("open"));
+  f.classList.toggle("collapsed", !narrow && state.filtersHidden);
   const btn = $("#facetsToggle");
-  btn.hidden = !active || narrow;
+  btn.hidden = narrow;
   const label = state.filtersHidden ? "Show filters" : "Hide filters";
   btn.title = label; btn.setAttribute("aria-label", label);
   btn.setAttribute("aria-pressed", state.filtersHidden ? "false" : "true");
@@ -249,7 +251,7 @@ function renderModeToggle() {
     b.setAttribute("aria-selected", state.mode === id ? "true" : "false");
     b.onclick = () => {
       if (state.mode === id) return;
-      state.mode = id; state.page = 1; run(true);
+      state.mode = id; state.wantedMode = id; state.page = 1; run(true);
     };
     box.appendChild(b);
   }
@@ -351,6 +353,10 @@ function renderActiveChips() {
 }
 
 const FACET_SHOW = 14;
+// in the model-extracted lists an option fewer teams than this share is noise;
+// the official ones (year, section, village, region, country) show everything
+const FACET_MIN = 3;
+const FACET_MIN_KINDS = new Set(["chassis", "molecule", "technique", "part"]);
 
 function renderFacets(data) {
   const wrap = $("#facetGroups"); wrap.innerHTML = "";
@@ -359,7 +365,10 @@ function renderFacets(data) {
   // a filter that is switched on is never tucked out of sight
   const extraOn = FACET_KINDS.slice(MAIN_FACETS).some(([k]) => state.filters[k]);
   FACET_KINDS.forEach(([kind, label], n) => {
-    const items = kinds[kind];
+    // a ticked option stays listed however few teams it has, so it can be unticked
+    const items = (kinds[kind] || []).filter((it) =>
+      !FACET_MIN_KINDS.has(kind) || it.count >= FACET_MIN ||
+      (state.filters[kind] && state.filters[kind].has(it.key || it.value.toLowerCase())));
     if (!items || !items.length) return;
     state.labels[kind] = state.labels[kind] || {};
     const g = el("div", "facet-group");
@@ -367,7 +376,10 @@ function renderFacets(data) {
     const list = el("div", "facet-list");
     h.onclick = () => list.toggleAttribute("hidden");
     g.appendChild(h);
-    let shown = FACET_SHOW;
+    // open far enough that every ticked option is in sight
+    const on = state.filters[kind];
+    const lastOn = on ? items.reduce((m, it, i) => on.has(it.key || it.value.toLowerCase()) ? i : m, -1) : -1;
+    let shown = Math.max(FACET_SHOW, lastOn + 1);
     const paint = () => {
       list.innerHTML = "";
       for (const it of items.slice(0, shown)) {
@@ -561,15 +573,34 @@ function linkify(s) {
 }
 
 // ---- Workspace: wiki (left) + Ask-AI chat (right), side by side ----
+// the chat folds away the same way the filters do, and stays folded for the
+// next team opened in this visit
+let _aiFolded = false;
 function initWorkspace(pane) {
   const t = _curTeam;
   const split = el("div", "workspace");
   const wikiCol = el("div", "wiki-col");
   const aiCol = el("div", "ai-col");
+  const head = el("div", "ai-head");
+  const fold = el("button", "facets-toggle ai-toggle");
+  fold.type = "button";
+  fold.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+  head.append(fold, el("span", "ai-title", "Ask AI"));
+  const body = el("div", "ai-body");
+  aiCol.append(head, body);
+  const paint = () => {
+    split.classList.toggle("ai-folded", _aiFolded);
+    const label = _aiFolded ? "Show AI chat" : "Hide AI chat";
+    fold.title = label; fold.setAttribute("aria-label", label);
+    fold.setAttribute("aria-pressed", _aiFolded ? "false" : "true");
+  };
+  fold.onclick = () => { _aiFolded = !_aiFolded; paint(); };
+  paint();
   split.append(wikiCol, aiCol);
   pane.appendChild(split);
   buildWikiView(wikiCol, t);
-  initAiPane(aiCol);
+  initAiPane(body);
 }
 
 // ---- Wiki view: the live page in a frame, with a Live/Saved toggle. Some iGEM
@@ -1094,8 +1125,7 @@ async function run(push) {
   });
   if (seq !== _runSeq) return;   // a newer run started while we waited
   if (m.mode && m.mode !== state.mode) { state.mode = m.mode; renderModeToggle(); }
-  $("#sortnote").textContent = (SORTNOTE[m.mode] || SORTNOTE.lexical) +
-    (m.ms != null ? " · " + m.ms + " ms" : "");
+  $("#sortnote").textContent = SORTNOTE[m.mode] || SORTNOTE.lexical;
   const res = { total: m.total, page: m.page, page_size: PAGE_SIZE, results: m.results };
   renderResults(res);
   state.lastRes = res;
@@ -1331,26 +1361,32 @@ async function loadRemoteContent(base) {
 
 /* Concept mode needs the LSA model. It loads after the first paint; until it
    arrives (or if it never does) only Keyword is offered, same as before. */
+/* Boot asks for the model twice (bundled copy, then the database repo). The
+   second call waits for the first and only loads if that one failed; loading it
+   again used to put the page back into Keyword mode a second after the reader
+   had picked Concept. */
+let _conceptLoad = null;
 async function loadConcept(base) {
+  if (_conceptLoad) await _conceptLoad.catch(() => {});
   if (state.semantic) return;
-  try {
+  _conceptLoad = (async () => {
     const model = await fetchGz(base + "lsa.json.gz");
     // the model is a row per record, in order, so a stale one must be ignored
     const n = (state.meta && state.meta.record_count) || 0;
     if (model.n !== n) return;
     const ok = await askWorker({ type: "lsa", model });
-    if (ok && ok.ok) {
-      _lsaModel = model;
-      state.semantic = true;
-      // a shared ?mode=hybrid link asked for concept search before we could offer it
-      if (state.wantedMode && state.wantedMode !== state.mode) {
-        state.mode = state.wantedMode;
-        if (hasQuery()) { run(false); return; }
-      }
-      renderModeToggle();
-      setMode();
+    if (!(ok && ok.ok) || state.semantic) return;
+    _lsaModel = model;
+    state.semantic = true;
+    // a shared ?mode=hybrid link asked for concept search before we could offer it
+    if (state.wantedMode === "hybrid" && state.mode !== "hybrid") {
+      state.mode = "hybrid";
+      if (hasQuery()) { run(false); return; }
     }
-  } catch (e) { /* keyword only */ }
+    renderModeToggle();
+    setMode();
+  })();
+  try { await _conceptLoad; } catch (e) { /* keyword only */ }
 }
 
 /* "Last updated" comes from the database repo's own Last-Modified header, so it
