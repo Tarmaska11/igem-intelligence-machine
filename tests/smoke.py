@@ -141,10 +141,10 @@ def main():
         check("two options in one section", yr.locator(".facet-item.on").count() == 2)
         page.locator("#facetsToggle").click()
         page.wait_for_timeout(300)
-        check("menu button hides the filters", not page.is_visible("#facets"))
+        check("menu button folds the filters", not page.is_visible("#facetGroups") and page.is_visible("#facetsToggle"))
         page.locator("#facetsToggle").click()
         page.wait_for_timeout(300)
-        check("menu button brings them back", page.is_visible("#facets"))
+        check("menu button brings them back", page.is_visible("#facetGroups"))
         page.locator("#clearFilters").click()
         page.wait_for_timeout(900)
         before = page.inner_text("#resultCount")
@@ -156,7 +156,24 @@ def main():
         page.wait_for_timeout(900)
         check("clear all removes the chips", page.locator("#activeChips .chip").count() == 0)
 
+        print("concept mode")
+        # pick Concept the moment it is offered: the page used to load the model a
+        # second time a moment later and drop the reader back into Keyword mode
+        page.goto(BASE, wait_until="domcontentloaded")
+        page.wait_for_selector("#heroStats:not(:empty)", timeout=40000)
+        page.fill("#q", "spider silk")
+        page.keyboard.press("Enter")
+        page.wait_for_selector("#modeToggle:not([hidden]) button >> nth=1", timeout=60000)
+        page.wait_for_selector("#resultCount:not(:empty)", timeout=40000)
+        kw = int(page.inner_text("#resultCount").split()[0])
+        page.locator("#modeToggle button").nth(1).click()
+        page.wait_for_timeout(8000)
+        check("Concept stays picked", "Concept" in page.locator("#modeToggle button.on").inner_text())
+        check("Concept adds related projects", int(page.inner_text("#resultCount").split()[0]) > kw)
+
         print("team drawer")
+        page.goto(BASE + "?q=biosensor", wait_until="domcontentloaded")
+        page.wait_for_function("()=>document.querySelectorAll('.card').length>0", timeout=40000)
         page.locator(".card").first.click()
         page.wait_for_selector(".dh h2", timeout=30000)
         page.wait_for_timeout(1200)
@@ -195,6 +212,15 @@ def main():
         page.wait_for_timeout(1200)
         check("chat answers without a key instead of failing",
               page.locator(".ai-msg").count() >= 2)
+        wiki_w = page.evaluate("()=>document.querySelector('.wiki-col').getBoundingClientRect().width")
+        page.locator(".ai-toggle").click()
+        page.wait_for_timeout(300)
+        check("menu button folds the AI chat", not page.is_visible(".ai-body"))
+        check("the wiki takes the room",
+              page.evaluate("()=>document.querySelector('.wiki-col').getBoundingClientRect().width") > wiki_w + 150)
+        page.locator(".ai-toggle").click()
+        page.wait_for_timeout(300)
+        check("and brings it back", page.is_visible(".ai-body"))
         check("wiki address is a link",
               page.evaluate("()=>document.querySelector('.wiki-url').tagName") == "A")
         page.locator(".wiki-mode").nth(1).click()

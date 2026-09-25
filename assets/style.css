@@ -1192,9 +1192,30 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
 /* reaching the end of the filters does not start scrolling the page */
 @media(min-width:881px){#facets{overscroll-behavior:contain}}
 
-/* the ☰ button that puts the filter column away */
-.results-title{display:flex;align-items:center;gap:12px;min-width:0}
-.facets-toggle{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
-  padding:0;background:var(--panel);color:var(--ink-dim);border:1px solid var(--line-strong);border-radius:var(--radius)}
+/* the ☰ button in the filter column; folded, the column is a narrow strip
+   holding only that button */
+.facets-toggle{flex:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+  padding:0;margin-right:10px;background:var(--panel);color:var(--ink-dim);border:1px solid var(--line-strong);border-radius:var(--radius)}
 .facets-toggle:hover{border-color:var(--accent);color:var(--accent)}
 .facets-toggle[aria-pressed="false"]{color:var(--accent);border-color:var(--accent)}
+.facets-head{justify-content:flex-start}
+.facets-head #clearFilters{margin-left:auto}
+@media(min-width:881px){
+  #facets.collapsed{width:60px;padding:22px 14px;overflow:hidden}
+  #facets.collapsed .facets-head{margin:0}
+  #facets.collapsed .facets-head > :not(.facets-toggle),
+  #facets.collapsed #activeChips,#facets.collapsed #facetGroups{display:none}
+  #facets.collapsed .facets-toggle{margin:0}
+}
+
+/* the AI chat folds to a strip holding only its ☰ button, like the filters */
+.ai-head{display:flex;align-items:center;flex:none;margin-bottom:10px}
+.ai-title{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--ink-dim)}
+.ai-body{display:flex;flex-direction:column;flex:1;min-height:0}
+.workspace.ai-folded .ai-body,.workspace.ai-folded .ai-title{display:none}
+.workspace.ai-folded .ai-toggle{margin:0}
+@media(min-width:1025px){
+  .workspace.ai-folded{grid-template-columns:minmax(0,1fr) 48px}
+  .workspace.ai-folded .ai-col{padding-left:12px}
+}
+@media(max-width:560px){ .ai-body{display:block} }
