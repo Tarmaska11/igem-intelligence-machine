@@ -6,13 +6,13 @@
   "files": {
     "cards": {
       "path": "cards.json.gz",
-      "sha": "312613db8df3e86d",
-      "bytes": 1972819
+      "sha": "652e850e9444442e",
+      "bytes": 1958991
     },
     "records": {
       "path": "records.json.gz",
-      "sha": "f241c6a94470159a",
-      "bytes": 5960961
+      "sha": "0f597f65c2970ffb",
+      "bytes": 5955614
     },
     "index": {
       "path": "index.json.gz",
@@ -21,8 +21,8 @@
     },
     "facets": {
       "path": "facets.json.gz",
-      "sha": "c1ab460df7d55423",
-      "bytes": 433034
+      "sha": "47fbb0d3ed2dcca2",
+      "bytes": 130287
     },
     "parts": {
       "path": "parts.json.gz",

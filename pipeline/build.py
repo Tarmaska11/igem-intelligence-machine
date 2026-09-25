@@ -252,8 +252,6 @@ def build_records(seen, td, qa):
             vil = canon.village(facets["track"][0], (facets.get("domain") or [""])[0])
             facets["track"] = [vil] if vil else []
         facets["year"] = [str(year)]
-        if rec["fm"]:
-            facets["failures"] = ["Documents failures"]
         rec["f"] = {k: v for k, v in facets.items() if v}
         rec["core"] = core
         q = qa.get(rec["id"])
@@ -344,7 +342,7 @@ def build_facets(records):
         if kind == "year":
             items = sorted(vals.items(), key=lambda kv: -int(kv[0]))
         out[kind] = [{"v": v, "k": facet_key(kind, v), "n": len(ids), "d": ids}
-                     for v, ids in items]
+                     for v, ids in items if canon.keep_value(kind, v, len(ids))]
     return out
 
 

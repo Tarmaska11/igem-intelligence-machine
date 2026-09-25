@@ -26,7 +26,7 @@ def norm(s):
 # Values that carry no information. Dropped entirely.
 JUNK = re.compile(
     r"^(n/?a|none|not specified|not mentioned|unknown|unspecified|other|various|"
-    r"multiple|several|general|tbd|-+|misc\w*|none explicitly mentioned|"
+    r"multiple|several|general|tbd|-+|misc\w*|none explicitly mentioned|water|"
     r"no\b.*(mention|specif)\w*|.*not (applicable|available).*)$"
 )
 
@@ -48,10 +48,11 @@ DOMAIN = [
 ]
 
 TECHNIQUE = [
-    ("qPCR / RT-qPCR",           r"\b(q-?pcr|rt-?q?-?pcr|real.?time pcr|quantitative pcr)\b"),
-    ("PCR",                      r"\bpcr\b|polymerase chain reaction"),
+    ("qPCR / RT-qPCR",           r"\b(q-?pcr|rt-?q?-?pcr|real.?time pcr|quantitative pcr)\b|reverse transcri"),
+    ("Isothermal amplification", r"isothermal|recombinase polymerase|\brpa\b|rolling circle|\blamp\b"),
+    ("PCR",                      r"\bpcr\b|polymerase chain reaction|primer design"),
     ("Gel electrophoresis",      r"electrophoresis"),
-    ("SDS-PAGE",                 r"sds.?page"),
+    ("SDS-PAGE",                 r"sds.?page|coomassie"),
     ("Western blot",             r"western blot"),
     ("ELISA",                    r"\belisa\b"),
     ("Flow cytometry",           r"flow cytometry|facs"),
@@ -60,20 +61,26 @@ TECHNIQUE = [
     ("BioBrick assembly",        r"biobrick|3a assembly"),
     ("Restriction digestion",    r"restriction|digest"),
     ("Ligation",                 r"\bligat|ligase"),
-    ("Molecular cloning",        r"clon(e|ing)|plasmid construction|vector construction"),
-    ("Transformation",           r"transformation|heat.?shock|electroporation|conjugation"),
-    ("Transfection",             r"transfect"),
+    ("Molecular cloning",        r"clon(e|ing)|plasmid construction|vector construction|^plasmids?$|recombinant dna|blue.?white"),
+    ("Transformation",           r"transformation|heat.?shock|electroporation|conjugation|competent cell"),
+    ("Transfection",             r"transfect|transduc|lentivir"),
     ("CRISPR",                   r"crispr|cas9|cas12|cas13|guide rna|\bgrna\b"),
     ("Site-directed mutagenesis", r"mutagenes"),
-    ("Directed evolution",       r"directed evolution|phage display"),
+    ("Directed evolution",       r"directed evolution|phage display|\bselex\b"),
     ("Sequencing",               r"sequenc"),
     ("DNA / gene synthesis",     r"(dna|gene) synthesis"),
     ("Codon optimisation",       r"codon"),
     ("Homologous recombination", r"recombination|knock.?(in|out)"),
     ("RNA interference",         r"rna interference|\brnai\b|sirna|antisense"),
-    ("Protein expression",       r"protein expression|recombinant protein|overexpress|induction|iptg"),
+    ("Protein expression",       r"protein expression|recombinant protein|overexpress|induction|iptg|heterologous expression"),
     ("Protein purification",     r"purificat|chromatograph|affinity|ni-?nta"),
     ("Protein engineering",      r"protein engineering|enzyme engineering|rational design"),
+    ("Genetic circuit design",   r"promoter engineering|genetic circuit|circuit design|logic gate|rbs engineering|rbs calculator"),
+    ("Protein secretion & display", r"secretion|surface display|cell surface"),
+    ("Lateral flow / paper tests", r"lateral flow|paper.?based|test strip"),
+    ("Freeze-drying",            r"freeze.?dr|lyophili"),
+    ("Software & web development", r"software|web ?development|app development|programming"),
+    ("Spectroscopy & electrochemistry", r"spectroscop|light scattering|\bdls\b|voltammetr|electrochem|impedance|circular dichroism|\bnmr\b|raman|ftir"),
     ("Fluorescence microscopy",  r"fluorescen\w* microscop|confocal"),
     ("Electron microscopy",      r"electron microscop|\b(sem|tem)\b|atomic force"),
     ("Microscopy",               r"microscop"),
@@ -81,10 +88,10 @@ TECHNIQUE = [
     ("Spectrophotometry",        r"spectrophotom|od600|absorbance|plate reader|nanodrop"),
     ("Mass spectrometry",        r"mass spec|gc-?ms|lc-?ms|maldi"),
     ("Chromatography (HPLC/GC)", r"\bhplc\b|gas chromatograph|liquid chromatograph"),
-    ("Cell culture & fermentation", r"cell culture|liquid culture|plating|streak|fermentat|bioreactor"),
-    ("Growth assays",            r"growth (curve|assay)|od measurement|viability|\bcfu\b"),
-    ("Enzyme assays",            r"enzyme (activity|assay)|kinetic|bradford|\bbca\b|colorimetric"),
-    ("Nucleic acid extraction",  r"miniprep|midiprep|maxiprep|(dna|rna|plasmid|gel) extraction"),
+    ("Cell culture & fermentation", r"cell culture|liquid culture|plating|streak|fermentat|bioreactor|bacterial culture|microbiolog|autoclav|steriliz|antibiotic selection|culturing"),
+    ("Growth assays",            r"growth (curve|assay)|od measurement|viability|\bcfu\b|\bmtt\b|cck-?8|cytotox"),
+    ("Enzyme assays",            r"enzyme (activity|assay)|kinetic|bradford|\bbca\b|colorimetric|biochemical assay|luciferase assay|luminescen"),
+    ("Nucleic acid extraction",  r"miniprep|midiprep|maxiprep|(dna|rna|plasmid|gel) extraction|(plasmid|dna|rna) isolation"),
     ("Molecular docking",        r"docking"),
     ("Structure prediction",     r"alphafold|structure prediction|homology model|rosetta"),
     ("Molecular dynamics",       r"molecular dynamic|\bmd simulation"),
@@ -133,71 +140,75 @@ CHASSIS = [
 ]
 
 MOLECULE = [
-    ("Heavy metals",             r"cadmium|\blead\b|mercury|arsenic|chromium|\bcopper\b|\bzinc\b|nickel|heavy metal"),
-    ("Plastics (PET & micro)",   r"\bpet\b|polyethylene terephthalate|microplastic|plastic|terephthalic|ethylene glycol|polystyrene|polyurethane"),
+    ("Heavy metals",             r"cadmium|\blead\b|mercury|arsenic|chromium|\bcopper\b|\bzinc\b|nickel|heavy metal|\b(pb|cd|hg|cu|zn|ni|cr) ?[1-6]?\+|^(pb|cd|hg)$"),
+    ("Plastics (PET & micro)",   r"\bpet\b|polyethylene terephthalate|microplastic|plastic|terephthalic|ethylene glycol|polystyrene|polyurethane|\btpa\b|\bmhet\b"),
     ("Antibiotics",              r"antibiotic|penicillin|ampicillin|kanamycin|tetracyclin|chloramphenicol|vancomycin"),
     ("Pesticides & herbicides",  r"pesticide|herbicide|glyphosate|atrazine|organophosph|insecticide"),
-    ("Fluorescent reporters",    r"\bgfp\b|\brfp\b|mcherry|sfgfp|\byfp\b|\bcfp\b|fluorescent protein|luciferase"),
+    ("Fluorescent reporters",    r"\bgfp\b|\brfp\b|mcherry|sfgfp|egfp|\byfp\b|\bcfp\b|fluorescent protein|luciferase"),
     ("Greenhouse gases",         r"carbon dioxide|\bco2\b|methane|\bch4\b|nitrous oxide|greenhouse"),
     ("Nitrogen compounds",       r"nitrate|nitrite|ammoni|urea|nitrogen"),
     ("Phosphorus compounds",     r"phosphate|phosphorus"),
-    ("Sugars & carbohydrates",   r"glucose|sucrose|lactose|xylose|arabinose|fructose|galactose|starch|cellulose|chitin|glycogen|carbohydrate|\bsugar"),
-    ("Alcohols & solvents",      r"ethanol|methanol|butanol|glycerol|isopropanol|acetone|\bsolvent"),
-    ("Organic acids",            r"lactic acid|acetic acid|citric acid|succinic|butyric|fatty acid|organic acid"),
-    ("Amino acids & peptides",   r"amino acid|tryptophan|tyrosine|glutamate|lysine|peptide"),
-    ("Nucleic acids",            r"^(dna|rna|mrna|sirna|trna|plasmid dna|cdna)$|nucleic acid|oligonucleotide"),
+    ("Sugars & carbohydrates",   r"glucose|sucrose|lactose|xylose|arabinose|fructose|galactose|starch|cellulose|chitin|chitos|glycogen|carbohydrate|\bsugar"),
+    ("Alcohols & solvents",      r"ethanol|methanol|butanol|glycerol|isopropanol|acetone|\bsolvent|aldehyde"),
+    ("Lipids & oils",            r"lipid|triglycerid|fatty acid|^oils?$|(vegetable|cooking|plant|essential) oil"),
+    ("Organic acids",            r"lactic acid|acetic acid|citric acid|succinic|butyric|organic acid|salicyl|formic|formate|uric acid"),
+    ("Neurotransmitters",        r"serotonin|dopamine|l-?dopa|\bgaba\b|melatonin|acetylcholine|neurotransmitter"),
+    ("Amino acids & peptides",   r"amino acid|tryptophan|tyrosine|glutamate|lysine|peptide|glutathione"),
+    ("Nucleic acids",            r"^(dna|rna|mrna|sirna|trna|plasmid dna|cdna)$|nucleic acid|oligonucleotide|mirna|microrna"),
     ("Reactive oxygen species",  r"reactive oxygen|hydrogen peroxide|\bros\b|superoxide|free radical"),
-    ("Hormones & steroids",      r"hormone|estrogen|insulin|testosterone|cortisol|steroid|auxin"),
+    ("Hormones & steroids",      r"hormone|estrogen|insulin|testosterone|cortisol|steroid|auxin|cholesterol"),
     ("Signalling molecules",     r"\bahl\b|homoserine lactone|quorum|autoinducer|cyclic di|\bcamp\b|\batp\b"),
     ("Toxins & mycotoxins",      r"toxin|aflatoxin|ochratoxin|botulinum|\bricin"),
     ("Dyes & textile waste",     r"\bdye|azo\b|methylene blue|textile"),
     ("Pharmaceutical residues",  r"pharmaceutic|ibuprofen|paracetamol|acetaminophen|diclofenac|caffeine"),
-    ("Terpenes & natural products", r"terpene|limonene|carotenoid|lycopene|flavonoid|polyphenol|anthocyanin|natural product"),
-    ("Pathogens & biomarkers",   r"pathogen|bacteri|virus|sars|staphylococ|biomarker|antigen"),
-    ("Water pollutants (other)", r"pollutant|contaminant|effluent|wastewater|oil spill|petroleum|hydrocarbon"),
-    ("Physical stimuli",         r"^(light|temperature|ph|heat|pressure|uv|uv radiation|sound|magnetic field)$"),
-    ("Inducers & signals",       r"iptg|arabinose|nisin|anhydrotetracycline|atc|inducer|ahl"),
-    ("Central metabolites",      r"lactate|acetate|pyruvate|butyrate|acetyl-?coa|nad[ph]*|succinate|malate|citrate"),
-    ("Gases (O2/H2/H2S/NO)",     r"^(oxygen|hydrogen|hydrogen sulfide|nitric oxide|no|h2s?|o2|ozone)$|sulfide|sulphide"),
-    ("Minerals & salts",         r"iron|calcium|magnesium|potassium|sodium chloride|carbonate|silica|salt|mineral"),
-    ("Biopolymers & bioplastics", r"polyhydroxy|pha|phb|lignin|polyethylene|bioplastic|biopolymer|silk|collagen|keratin"),
+    ("Terpenes & natural products", r"terpene|limonene|carot|lycopene|flavonoid|polyphenol|anthocyanin|natural product|indigo|vanillin|geraniol|naringenin|resveratrol|curcumin|violacein|astaxanthin"),
+    ("Pathogens & biomarkers",   r"pathogen|bacteri|virus|sars|staphylococ|biomarker|antigen|pseudomonas|streptococc|escherichia|\be\.? ?coli\b|salmonella|listeria|helicobacter|candida|\bher2\b|tumou?r|cancer|biofilm|antibod"),
+    ("Water pollutants (other)", r"pollutant|contaminant|effluent|wastewater|oil spill|petroleum|hydrocarbon|pfas|pfoa|pfos|perfluoro|toluene|benzene|phenol|catechol|alkane|\bbtex\b"),
+    ("Physical stimuli",         r"^(light|blue light|red light|green light|near.?infrared( light)?|nir light|temperature|ph|heat|cold|pressure|uv|uv light|uv radiation|sound|ultrasound|magnetic field|electric field|electricity|electrons)$"),
+    ("Inducers & signals",       r"\biptg\b|arabinose|nisin|anhydrotetracycline|\batc\b|inducer|\bahl\b"),
+    ("Central metabolites",      r"lactate|acetate|pyruvate|butyrate|acetyl-?coa|\bnad[ph]*\b|succinate|malate|citrate"),
+    ("Gases (O2/H2/H2S/NO)",     r"^(oxygen|hydrogen|hydrogen sulfide|nitric oxide|\bno\b|\bh2s?\b|\bo2\b|ozone)$|sulfide|sulphide"),
+    ("Minerals & salts",         r"\biron\b|calcium|magnesium|potassium|sodium chloride|carbonate|silica|\bsalt\b|mineral"),
+    ("Biopolymers & bioplastics", r"polyhydroxy|\bpha\b|\bphb\b|lignin|polyethylene|bioplastic|biopolymer|silk|collagen|keratin"),
     ("Proteins (generic)",       r"^(protein|proteins|enzyme|enzymes|gene expression|fluorescence|biomass)$"),
     ("Vitamins & cofactors",     r"vitamin|folic|folate|riboflavin|cofactor|biotin|heme"),
 ]
 
 PART = [
-    ("Reporter: GFP family",     r"\b(sf)?gfp\b|egfp|gfpmut|green fluorescent"),
+    ("Reporter: GFP family",     r"\b(sf)?gfp\b|egfp|gfpmut|green fluorescent|amilgfp|mneongreen|superfolder|\bmgfp\b"),
     ("Reporter: RFP / mCherry",  r"\brfp\b|mcherry|mrfp|dsred|mscarlet|red fluorescent"),
-    ("Reporter: other fluorescent", r"\b[ye]fp\b|\bcfp\b|mvenus|mturquoise|cerulean|fluorescent protein"),
+    ("Reporter: other fluorescent", r"\b[ye]fp\b|\bcfp\b|\be[cyb]fp\b|\bbfp\b|mvenus|mturquoise|cerulean|citrine|mclover|morange|fluorescent protein"),
     ("Reporter: LacZ / luciferase", r"lacz|luciferase|\blux[ab]\b|galactosidase|chromoprotein|amilcp"),
     ("Promoter: T7",             r"\bt7\b"),
-    ("Promoter: lac / tac",      r"\bp?lac\w*\b.*promoter|promoter.*lac|\bptac\b|\btrc\b"),
-    ("Promoter: tet",            r"\bp?tet\w*\b.*promoter|promoter.*tet|\bptet\b"),
+    ("Promoter: lac / tac",      r"\bp?lac\w*\b.*promoter|promoter.*lac|\bptac\b|\btrc\b|^p ?lac$|\blac ?operator\b|\blaco\b"),
+    ("Promoter: tet",            r"\bp?tet\w*\b.*promoter|promoter.*tet|\bptet\b|\bteto\b|tet operator"),
     ("Promoter: ara / rha",      r"\bpbad\b|ara\w*.*promoter|rhamnose promoter"),
     ("Promoter: constitutive",   r"constitutive|j23\d{3}|anderson promoter"),
     ("Promoter: other",          r"promoter"),
     ("Ribosome binding site",    r"\brbs\b|ribosome binding|shine.?dalgarno|b0034|b0032"),
     ("Terminator",               r"terminator|b0015|b0010"),
-    ("Regulator: LacI / TetR / AraC", r"\blaci\b|\btetr\b|\barac\b|repressor|lambda ci"),
-    ("Regulator: quorum (Lux)",  r"\blux[ri]\b|\blas[ri]\b|\brhl[ri]\b"),
-    ("CRISPR: Cas / gRNA",       r"cas9|cas12|cas13|dcas9|\bs?grna\b|guide rna|crispr"),
-    ("Affinity tag",             r"his.?tag|6x?his|\bflag\b|\bmbp\b|\bgst\b|strep.?tag|sumo"),
-    ("Signal peptide / secretion", r"signal peptide|secretion|pelb|ompa|tat pathway"),
-    ("Plasmid backbone",         r"psb\w+|\bpet\d|\bpuc\d|pcdf|prsf|pacyc|backbone|\bvector\b|plasmid"),
+    ("Regulator / repressor",    r"\blaci\b|\btetr\b|\barac\b|repressor|lambda ci|^ci\d*$|\bgal4\b|\blexa\b"),
+    ("Regulator: quorum (Lux)",  r"\blux[ri]\b|\blas[ri]\b|\brhl[ri]\b|\bplux\b|lux operon|\baiia\b|quorum"),
+    ("CRISPR: Cas / gRNA",       r"cas9|cas12|cas13|dcas9|\bs?grna\b|guide rna|crispr|crrna"),
+    ("Affinity tag",             r"his.?tag|6x?his|\bflag\b|\bmbp\b|\bgst\b|strep.?tag|sumo|\bha.?tag|myc.?tag"),
+    ("Signal peptide / secretion", r"signal peptide|secretion|pelb|ompa|tat pathway|\bhly[abd]\b"),
+    ("Plasmid backbone",         r"psb\w+|\bpet-?\d|pet ?duet|pcold|pgex|\bpuc\d|pcdf|prsf|pacyc|backbone|\bvector\b|plasmid"),
+    ("Restriction enzyme",       r"ecori|psti|xbai|spei|bsai|bsmbi|noti|bamhi|hindiii|ndei|xhoi|restriction enzyme"),
+    ("Antimicrobial peptide",    r"ll-?37|nisin|antimicrobial peptide|defensin|bacteriocin|endolysin"),
     ("Enzyme: PETase / MHETase", r"petase|mhetase|cutinase"),
     ("Enzyme: laccase / peroxidase", r"laccase|peroxidase|\bp450\b|monooxygenase|dioxygenase"),
     ("Enzyme: cellulase / amylase", r"cellulase|amylase|xylanase|lipase|protease|chitinase"),
+    ("Toxin / kill switch",      r"\bmazf\b|\bmaze\b|\bccdb\b|\bsacb\b|kill switch|toxin.?antitoxin|\brelbe\b|\bmerr\b"),
     ("Enzyme: other",            r"enzyme|\w+ase\b"),
-    ("Binding protein / antibody", r"antibody|nanobody|scfv|aptamer|binding protein|receptor"),
-    ("Riboswitch / sRNA",        r"riboswitch|ribozyme|\bsrna\b|aptazyme|toehold"),
+    ("Binding protein / antibody", r"antibody|nanobody|scfv|aptamer|binding protein|receptor|streptavidin|avidin"),
+    ("Riboswitch / sRNA",        r"riboswitch|ribozyme|\bsrna\b|aptazyme|toehold|sirna|shrna"),
     ("Degradation tag",          r"\bssra\b|degradation tag|\blva\b"),
     ("Origin of replication",    r"\bori\b|origin of replication|cole1|p15a"),
-    ("Antibiotic resistance marker", r"resistance|\bamp[r]?\b|\bkan[r]?\b|selection marker"),
+    ("Selection marker",         r"resistance|\bamp[r]?\b|\bkan[r]?\b|selection marker|\bura3\b|\bleu2\b|\bhis3\b|auxotroph"),
     ("Protein conjugation (Spy)", r"spytag|spycatcher|sortase|\bintein"),
     ("Recombinase site (lox/FRT)", r"\bloxp\b|\bfrt\b|recombinase|\bcre\b"),
-    ("Toxin / kill switch",      r"\bmazf\b|\bccdb\b|kill switch|toxin.?antitoxin|\brelbe\b|\bmerr\b"),
     ("Inducer molecule",         r"^(iptg|ahl|arabinose|atc|anhydrotetracycline|biotin)$"),
-    ("Registry part (BBa_)",     r"^bba[ _-]?[a-z]?\d+"),
+    ("Registry / BioBrick part", r"^bba[ _-]?[a-z]?\d+|^biobricks?$"),
 ]
 
 # The team CSVs give regions as slugs and countries as ISO-3 codes. These are the
@@ -253,10 +264,19 @@ def _title(s):
     return out[:1].upper() + out[1:]
 
 
+# Answers that are true of every project, so they filter nothing.
+GENERIC = {
+    "chassis": {"synthetic biology"},
+    "technique": {"experimental validation", "experimental design", "expression", "incubation"},
+    "molecule": {"metabolites", "nutrients"},
+    "part": {"reporter gene", "reporter genes", "linker", "linkers"},
+}
+
+
 def canon(kind, raw):
     """Canonical filter label for one raw facet value, or None to drop it."""
     n = norm(raw)
-    if not n or len(n) > 90 or JUNK.match(n):
+    if not n or len(n) > 90 or JUNK.match(n) or n in GENERIC.get(kind, ()):
         return None
     for label, rx in _COMPILED.get(kind, []):
         if rx.search(n):
@@ -306,3 +326,15 @@ def village(raw, domain):
     if v in OLD_TRACK:
         return OLD_TRACK[v]
     return DOMAIN_VILLAGE.get(domain or "", "")
+
+
+# The model spells things a thousand ways, so most raw values belong to one team.
+# A filter keeps its named groups, plus any other value at least this many teams share.
+TAIL_KINDS = {"molecule", "technique", "part", "chassis"}
+MIN_TEAMS = 10
+RULE_LABELS = {k: {label for label, _ in v} for k, v in RULES.items()}
+
+
+def keep_value(kind, label, n):
+    """Whether a filter value is worth listing, given how many teams have it."""
+    return kind not in TAIL_KINDS or label in RULE_LABELS.get(kind, ()) or n >= MIN_TEAMS
