@@ -22,7 +22,7 @@ NOT_TEAMS = {
 }
 
 # Names that are obviously a template placeholder rather than a real team.
-JUNK_NAME = re.compile(r"[\[\]{}<>]|^(your|insert|enter)|^tbd$", re.I)
+JUNK_NAME = re.compile(r"[\[\]{}<>]|^(your|insert|enter)\b|^tbd$", re.I)
 
 # Words that appear in one spelling of a name but not the other.
 _NOISE = re.compile(

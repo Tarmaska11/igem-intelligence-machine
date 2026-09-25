@@ -26,7 +26,6 @@ const FACET_KINDS = [
   ["molecule",  "Target molecule"],
   ["technique", "Molecular technique"],
   ["part",      "Biological part"],
-  ["domain",    "Application domain"],
   ["region",    "Region"],
   ["country",   "Country"],
 ];
@@ -60,6 +59,7 @@ const state = {
   meta: null,
   posts: [],
   moreFilters: false,   // the "More filters" block is open
+  filtersHidden: false, // the filter column was put away with the ☰ button
 };
 
 const $ = (s) => document.querySelector(s);
@@ -204,11 +204,15 @@ function hasQuery() {
   return state.q.trim() !== "" || Object.keys(state.filters).length > 0;
 }
 
+let _wasActive = false;
 function setMode() {
   const active = hasQuery();
+  // a search started from the home page always opens with the filters showing
+  if (active && !_wasActive) state.filtersHidden = false;
+  _wasActive = active;
   $("#topbar").classList.toggle("searching", active);
   $("#hero").hidden = active;
-  $("#facets").hidden = !active || (isNarrow() && !$("#facets").classList.contains("open"));
+  showFilters();
   $("#filterBtn").hidden = !active || !isNarrow();
   $("#resultsHead").hidden = !active;
   $("#pager").hidden = !active;
@@ -216,6 +220,20 @@ function setMode() {
   const sw = $(".searchwrap");
   if (sw) (active ? $("#headerSearch") : $("#heroSearch")).appendChild(sw);
   $("#modeToggle").hidden = !(active && state.semantic);
+}
+
+/* On a wide screen the filter column sits beside the results and the ☰ button
+   puts it away; on a phone it is a slide-in panel with its own Filters button. */
+function showFilters() {
+  const active = hasQuery();
+  const narrow = isNarrow();
+  $("#facets").hidden = !active ||
+    (narrow ? !$("#facets").classList.contains("open") : state.filtersHidden);
+  const btn = $("#facetsToggle");
+  btn.hidden = !active || narrow;
+  const label = state.filtersHidden ? "Show filters" : "Hide filters";
+  btn.title = label; btn.setAttribute("aria-label", label);
+  btn.setAttribute("aria-pressed", state.filtersHidden ? "false" : "true");
 }
 
 function renderModeToggle() {
@@ -705,6 +723,16 @@ function buildFind(bar, body, text) {
     else if (e.key === "Escape" && (input.value || query)) { e.stopPropagation(); input.value = ""; render(""); }
   });
 }
+
+// The layout is centred, so on a wide screen there is empty space left of the
+// filters. Scrolling anywhere left of the results scrolls the filters, not the page.
+document.addEventListener("wheel", (e) => {
+  const f = $("#facets");
+  if (!f || f.hidden || isNarrow() || !$("#drawer").hidden) return;
+  if (f.contains(e.target) || e.clientX >= f.getBoundingClientRect().right) return;
+  f.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  e.preventDefault();
+}, { passive: false });
 
 // Ctrl+F while the saved text is open goes to our box instead of the browser's
 document.addEventListener("keydown", (e) => {
@@ -1426,6 +1454,7 @@ function bindUI() {
   };
   $("#filterBtn").onclick = showFacets;
   $("#facetsScrim").onclick = hideFacets;
+  $("#facetsToggle").onclick = () => { state.filtersHidden = !state.filtersHidden; showFilters(); };
   $("#closeFacets").onclick = hideFacets;
 
   $("#drawer").querySelector(".drawer-bg").onclick = closeDrawer;
@@ -1441,14 +1470,13 @@ function bindUI() {
   window.addEventListener("resize", () => {
     if (!hasQuery()) return;
     if (!isNarrow()) {
-      $("#facets").hidden = false;
       $("#facets").classList.remove("open");
       $("#filterBtn").hidden = true;
       $("#facetsScrim").hidden = true;
     } else if (!$("#facets").classList.contains("open")) {
-      $("#facets").hidden = true;
       $("#filterBtn").hidden = false;
     }
+    showFilters();
   });
 }
 

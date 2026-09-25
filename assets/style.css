@@ -1189,3 +1189,12 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
 .facet-toggle::after{content:" ▾";color:var(--ink-faint)}
 .facet-toggle[aria-expanded="true"]::after{content:" ▴"}
 .facet-toggle:hover{border-color:var(--accent);background:var(--panel)}
+/* reaching the end of the filters does not start scrolling the page */
+@media(min-width:881px){#facets{overscroll-behavior:contain}}
+
+/* the ☰ button that puts the filter column away */
+.results-title{display:flex;align-items:center;gap:12px;min-width:0}
+.facets-toggle{flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  padding:0;background:var(--panel);color:var(--ink-dim);border:1px solid var(--line-strong);border-radius:var(--radius)}
+.facets-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.facets-toggle[aria-pressed="false"]{color:var(--accent);border-color:var(--accent)}
