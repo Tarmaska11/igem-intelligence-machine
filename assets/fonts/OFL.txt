@@ -1,6 +1,6 @@
 The fonts in this folder are used under the SIL Open Font License, Version 1.1.
 
-  Merriweather - Copyright 2016 The Merriweather Project Authors
+  Merriweather (upright and italic) - Copyright 2016 The Merriweather Project Authors
   (https://github.com/SorkinType/Merriweather)
 
   Inter - Copyright 2016-2024 The Inter Project Authors

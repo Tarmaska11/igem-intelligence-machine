@@ -172,6 +172,21 @@ def main():
         page.wait_for_timeout(1200)
         check("chat answers without a key instead of failing",
               page.locator(".ai-msg").count() >= 2)
+        check("wiki address is a link",
+              page.evaluate("()=>document.querySelector('.wiki-url').tagName") == "A")
+        page.locator(".wiki-mode").nth(1).click()
+        page.wait_for_selector(".find-q", timeout=20000)
+        page.locator(".find-q").fill("the")
+        page.locator(".find-q").press("Enter")
+        page.locator(".find-q").press("Enter")
+        page.wait_for_timeout(300)
+        check("find in saved text highlights matches",
+              page.locator("mark.find-hit").count() > 1 and page.locator("mark.cur").count() >= 1)
+        check("find steps to the next match",
+              page.inner_text(".find-count").startswith("2 / "), page.inner_text(".find-count"))
+        page.locator(".find-q").press("Escape")
+        check("Esc clears the search before closing anything",
+              page.locator("mark.find-hit").count() == 0 and not page.locator("#drawer").is_hidden())
 
         print("blog")
         page.keyboard.press("Escape")
