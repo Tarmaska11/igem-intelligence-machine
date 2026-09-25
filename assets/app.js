@@ -488,7 +488,40 @@ function buildDetails(p, t) {
   if (t.kr && t.kr.length) sect("Key results", bullets(t.kr));
   if (t.fm && t.fm.length) sect("Failure modes", bullets(t.fm, "fail"));
   if (t.n) sect("Novelty claim", para(t.n));
-  if (t.rf && t.rf.length) sect("Key references", bullets(t.rf));
+  // the same paper often turns up twice; the links open
+  if (t.rf && t.rf.length) {
+    const ul = el("ul", "refs");
+    [...new Set(t.rf.map((x) => plain(x).trim()).filter(Boolean))].forEach((x) => {
+      const li = el("li"); li.appendChild(linkify(x)); ul.appendChild(li);
+    });
+    sect("Key references", ul);
+  }
+}
+
+// Plain text with every web address turned into a link. Built from text nodes,
+// never innerHTML, because the text comes from team wikis and the model.
+const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/g;
+function urlRanges(s) {
+  const out = [];
+  for (const m of s.matchAll(URL_RE)) {
+    // a sentence often ends right after a link, and wiki markup leaves ") or "] behind
+    const u = m[0].replace(/[.,;:!?)\]}"']+$/, "");
+    if (u.length > 10) out.push([m.index, m.index + u.length]);
+  }
+  return out;
+}
+function linkify(s) {
+  const frag = document.createDocumentFragment();
+  let at = 0;
+  for (const [a, b] of urlRanges(s)) {
+    if (a > at) frag.appendChild(document.createTextNode(s.slice(at, a)));
+    const link = el("a", null, s.slice(a, b));
+    link.href = s.slice(a, b); link.target = "_blank"; link.rel = "noopener";
+    frag.appendChild(link);
+    at = b;
+  }
+  if (at < s.length) frag.appendChild(document.createTextNode(s.slice(at)));
+  return frag;
 }
 
 // ---- Workspace: wiki (left) + Ask-AI chat (right), side by side ----
@@ -523,7 +556,9 @@ function buildWikiView(container, t) {
   const textBtn = el("button", "wiki-mode", "Saved text");
   modes.append(liveBtn, textBtn);
   const open = el("a", "wiki-open", "Open in new tab ↗"); open.href = t.u; open.target = "_blank"; open.rel = "noopener";
-  bar.append(el("span", "wiki-url", t.u), modes, open);
+  const url = el("a", "wiki-url", t.u); url.href = t.u; url.target = "_blank"; url.rel = "noopener";
+  url.title = "Open the wiki in a new tab";
+  bar.append(url, modes, open);
   container.appendChild(bar);
 
   const stage = el("div", "wiki-stage");
@@ -548,14 +583,119 @@ function buildWikiView(container, t) {
     stage.appendChild(el("div", "wiki-note", auto
       ? "This wiki cannot be embedded, so here is the full text we saved from it."
       : "Saved offline wiki text from the corpus."));
+    const find = el("div", "wiki-find");
+    stage.appendChild(find);
     const body = el("div", "wiki-text"); body.textContent = "Loading saved text…";
     stage.appendChild(body);
-    body.textContent = (await wikiText(t)) || "No saved wiki text is stored for this project.";
+    const text = await wikiText(t);
+    if (!text) { body.textContent = "No saved wiki text is stored for this project."; find.remove(); return; }
+    body.textContent = "";
+    body.appendChild(linkify(text));
+    buildFind(find, body, text);
   }
   liveBtn.onclick = showLive;
   textBtn.onclick = () => showText(false);
   showLive();
 }
+
+// ---- Find in the saved text, like Ctrl+F but only inside the wiki text ----
+const FIND_MAX = 2000;   // a one-letter search on a long wiki would freeze the page
+let _findInput = null;
+
+function buildFind(bar, body, text) {
+  const input = el("input", "find-q");
+  input.type = "search"; input.placeholder = "Find in wiki text"; input.spellcheck = false;
+  const go = el("button", "find-go", "Find");
+  const prev = el("button", "find-step", "↑"); prev.title = "Previous (Shift+Enter)";
+  const next = el("button", "find-step", "↓"); next.title = "Next (Enter)";
+  const count = el("span", "find-count");
+  bar.append(input, go, prev, next, count);
+  _findInput = input;
+
+  let query = "", marks = [], total = 0, cur = -1;
+
+  function render(q) {
+    query = q; cur = -1;
+    const hits = [];
+    if (q) {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      let m;
+      while ((m = re.exec(text)) && hits.length < FIND_MAX + 1) hits.push([m.index, m.index + m[0].length]);
+    }
+    total = hits.length;
+    if (hits.length > FIND_MAX) hits.length = FIND_MAX;
+
+    // text, links and highlights are cut from the same string, so a hit inside a
+    // web address is still highlighted and the link still works
+    const frag = document.createDocumentFragment();
+    let h = 0;
+    const addText = (parent, a, b) => {
+      while (a < b) {
+        while (h < hits.length && hits[h][1] <= a) h++;
+        if (h >= hits.length || hits[h][0] >= b) { parent.appendChild(document.createTextNode(text.slice(a, b))); return; }
+        const [ha, hb] = hits[h];
+        if (ha > a) parent.appendChild(document.createTextNode(text.slice(a, ha)));
+        const e = Math.min(hb, b);
+        const mk = el("mark", "find-hit", text.slice(Math.max(ha, a), e));
+        mk.dataset.i = h;
+        parent.appendChild(mk);
+        a = e;
+      }
+    };
+    let at = 0;
+    for (const [a, b] of urlRanges(text)) {
+      addText(frag, at, a);
+      const link = el("a"); link.href = text.slice(a, b); link.target = "_blank"; link.rel = "noopener";
+      addText(link, a, b);
+      frag.appendChild(link);
+      at = b;
+    }
+    addText(frag, at, text.length);
+    body.textContent = "";
+    body.appendChild(frag);
+    marks = [...body.querySelectorAll("mark.find-hit")];
+    step(1);
+  }
+
+  function step(dir) {
+    const n = Math.min(total, FIND_MAX);
+    if (!query) { count.textContent = ""; return; }
+    if (!n) { count.textContent = "no matches"; count.classList.add("none"); return; }
+    count.classList.remove("none");
+    body.querySelectorAll("mark.cur").forEach((m) => m.classList.remove("cur"));
+    cur = cur < 0 ? (dir > 0 ? 0 : n - 1) : (cur + dir + n) % n;
+    const here = marks.filter((m) => +m.dataset.i === cur);
+    here.forEach((m) => m.classList.add("cur"));
+    // scroll the text box only; scrollIntoView would move the whole drawer too
+    if (here[0]) body.scrollTop = here[0].offsetTop - body.clientHeight / 3;
+    count.textContent = (cur + 1) + " / " + n + (total > FIND_MAX ? "+" : "");
+  }
+
+  function search(dir) {
+    const q = input.value;
+    if (q !== query) render(q);
+    else step(dir);
+  }
+  // the little x inside the box empties it without a key press
+  input.addEventListener("input", () => { if (!input.value && query) render(""); });
+  go.onclick = () => search(1);
+  next.onclick = () => search(1);
+  prev.onclick = () => search(-1);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); search(e.shiftKey ? -1 : 1); }
+    // the first Esc clears the search, the next one closes the drawer as usual
+    else if (e.key === "Escape" && (input.value || query)) { e.stopPropagation(); input.value = ""; render(""); }
+  });
+}
+
+// Ctrl+F while the saved text is open goes to our box instead of the browser's
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f") return;
+  if (!_findInput || !_findInput.isConnected || $("#drawer").hidden) return;
+  if (!_findInput.closest(".dpane.on")) return;
+  e.preventDefault();
+  _findInput.focus(); _findInput.select();
+});
 
 const _textCache = new Map();
 async function wikiText(t) {
@@ -667,6 +807,7 @@ function initAiPane(pane) {
     }
     ans.classList.remove("streaming");
     if (answer && !ans.classList.contains("err")) {
+      ans.textContent = ""; ans.appendChild(linkify(answer));
       history.push({ role: "user", text: q }, { role: "model", text: answer });
       if (history.length > 24) history.splice(0, history.length - 24);
     }

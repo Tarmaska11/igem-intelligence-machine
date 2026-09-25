@@ -121,7 +121,12 @@ def model_of(d, path):
         base = os.path.basename(path)
         if base.startswith("metadata_") and base.endswith(".json"):
             name = base[len("metadata_"):-len(".json")]
-    return re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
+    slug = re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
+    # chibimaid-e4b was just our local name for the Gemma 3n E4B file
+    return MODEL_NAMES.get(slug, slug)
+
+
+MODEL_NAMES = {"chibimaid-e4b": "Gemma 3n E4B"}
 
 
 # 2022 is when iGEM moved wikis to <year>.igem.wiki; everything older is still on
