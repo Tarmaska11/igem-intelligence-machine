@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Stamp a content hash onto the CSS and JS links so browsers cannot serve a stale copy.
-
-GitHub Pages sends `cache-control: max-age=600`, so after a change a browser will
-happily keep showing the old stylesheet. Adding ?v=<hash of the file> changes the
-URL whenever the file changes, which makes the cache miss and fetch the new one.
-
-    python pipeline/stamp.py
-"""
 import hashlib
 import io
 import os
@@ -26,7 +17,6 @@ def digest(rel):
 
 
 def restamp(text, rel, ver):
-    """Replace any existing ?v=… on this asset, or add one."""
     esc = re.escape(rel)
     text = re.sub(esc + r"\?v=[0-9a-f]+", rel + "?v=" + ver, text)
     if rel + "?v=" not in text:
@@ -37,8 +27,6 @@ def restamp(text, rel, ver):
 def main():
     vers = {rel: digest(rel) for rel in ASSETS}
 
-    # the worker is loaded from app.js, so stamp that reference first - it changes
-    # app.js, which is why app.js is hashed afterwards
     p = os.path.join(SITE, "assets", "app.js")
     js = io.open(p, encoding="utf-8").read()
     new = restamp(js, "assets/search.worker.js", vers["assets/search.worker.js"])

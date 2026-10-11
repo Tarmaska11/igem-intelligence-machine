@@ -1,10 +1,3 @@
-"""The same metrics the old harness used, so the tables read the same way.
-
-Two things worth remembering when reading a number here: MRR and Hit@1 look at the
-whole ranking with no cutoff, and Recall@k divides by the number of relevant records,
-not by k - so a query with 25 relevant teams can never score above 0.4 at k=10.
-"""
-
 import math
 
 
@@ -30,7 +23,6 @@ def ndcg_at_k(ordered, relevant, k):
 
 
 def score(rankings, queries, k=10):
-    """rankings[i] is the id list for queries[i]."""
     n = len(queries)
     if not n:
         return {"n": 0}
@@ -59,7 +51,6 @@ def score(rankings, queries, k=10):
 
 
 def ceilings(queries, k=10):
-    """Recall@k is capped by how many relevant records a query has."""
     n = len(queries) or 1
     return {
         "recall_ceiling": sum(min(len(q["rel"]), k) / len(q["rel"]) for q in queries) / n,

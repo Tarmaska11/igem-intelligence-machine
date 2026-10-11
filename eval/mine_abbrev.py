@@ -1,10 +1,3 @@
-"""The abbreviation eval set.
-
-Uses the same pairs pipeline/mine_synonyms.py finds, then keeps only records that
-spell the term out and never use the short form. Searching the short form therefore
-cannot succeed by literal matching - it only works if the two spellings are linked.
-"""
-
 import os
 import re
 import sys

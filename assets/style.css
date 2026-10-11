@@ -1,41 +1,32 @@
-/* Literata for headings, Nunito Sans for text - both self-hosted, SIL Open Font
-   License (assets/fonts/OFL.txt). The whole layout was measured with Merriweather
-   and Inter, so size-adjust and the metric overrides make the new faces take up
-   exactly the room the old ones did: same line widths, same baselines. */
 @font-face{font-family:'Literata';font-style:normal;font-weight:400 700;font-display:swap;size-adjust:99.4%;ascent-override:98.6%;descent-override:27.2%;line-gap-override:0%;src:url('fonts/literata.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 @font-face{font-family:'Literata';font-style:italic;font-weight:400 600;font-display:swap;size-adjust:99.4%;ascent-override:98.6%;descent-override:27.2%;line-gap-override:0%;src:url('fonts/literata-italic.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 @font-face{font-family:'Nunito Sans';font-style:normal;font-weight:400 700;font-display:swap;size-adjust:106%;ascent-override:91.4%;descent-override:22.8%;line-gap-override:0%;src:url('fonts/nunito-sans.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 @font-face{font-family:'Nunito Sans';font-style:italic;font-weight:400;font-display:swap;size-adjust:106%;ascent-override:91.4%;descent-override:22.8%;line-gap-override:0%;src:url('fonts/nunito-sans-italic.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-/* the name keeps its original face */
-@font-face{font-family:'Merriweather';font-style:normal;font-weight:300 900;font-display:swap;src:url('fonts/merriweather-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 
 :root{
-  /* ---- Scholarly Index: light, archival. Green is ink, not neon. ---- */
-  --bg:#fafaf7;        /* soft near-white paper */
-  --panel:#ffffff;     /* cards / surfaces */
-  --panel2:#f2f1ec;    /* insets, zebra, tag fill */
-  --line:#e7e4dc;      /* hairline rules */
+  --bg:#fafaf7;
+  --panel:#ffffff;
+  --panel2:#f2f1ec;
+  --line:#e7e4dc;
   --line-strong:#d3cfc4;
   --ink:#191c20; --ink-dim:#565a61; --ink-faint:#8b8f97;
-  --accent:#1f6b45;    /* deep forest green - buttons, links, logo, highlights */
+  --accent:#1f6b45;
   --accent-strong:#185738;
-  --leaf:#1f6b45;      /* same deep green for logo + headline highlight */
+  --leaf:#1f6b45;
   --accent-soft:#e7f0ea;
-  --amber:#9a6a1e;     /* accession / metadata */
-  --warn:#b23a2e;      /* failures */
+  --amber:#9a6a1e;
+  --warn:#b23a2e;
   --core:#1f6b45; --supporting:#3e6a9a; --mentioned:#8a8e96;
-  --radius:8px;        /* inputs, buttons, cards */
+  --radius:8px;
   --radius-sm:6px;
-  --radius-lg:14px;    /* feature cards */
+  --radius-lg:14px;
   --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
   --sans:"Nunito Sans",-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
   --serif:"Literata",Georgia,"Times New Roman",serif;
 }
 *{box-sizing:border-box}
-[hidden]{display:none !important}  /* ensure the hidden attr beats class display rules (.results-head/.pager are flex) */
-/* light scrollbars to match the paper theme (Firefox) */
+[hidden]{display:none !important}
 *{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
-/* light scrollbars (WebKit/Chromium/Edge) */
 ::-webkit-scrollbar{width:11px;height:11px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;
@@ -49,15 +40,12 @@ b{font-weight:700}
 button{font-family:inherit;cursor:pointer}
 .link{background:none;border:none;color:var(--accent);font-size:13px;padding:0}
 .link:hover{text-decoration:underline}
-/* accessible keyboard focus (replaces the neon glow rings) */
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-/* ---- faint topographic contour lines in the bottom corners (home ambience) ---- */
 .bg-contours{position:fixed;left:0;right:0;bottom:0;height:min(44vh,400px);z-index:-1;pointer-events:none;
   background:bottom center / cover no-repeat
   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1400 400'%3E%3Cg fill='none' stroke='%231f6b45' stroke-opacity='0.13' stroke-width='1.2'%3E%3Ccircle cx='0' cy='400' r='110'/%3E%3Ccircle cx='0' cy='400' r='170'/%3E%3Ccircle cx='0' cy='400' r='230'/%3E%3Ccircle cx='0' cy='400' r='290'/%3E%3Ccircle cx='0' cy='400' r='350'/%3E%3Ccircle cx='0' cy='400' r='410'/%3E%3Ccircle cx='1400' cy='400' r='110'/%3E%3Ccircle cx='1400' cy='400' r='170'/%3E%3Ccircle cx='1400' cy='400' r='230'/%3E%3Ccircle cx='1400' cy='400' r='290'/%3E%3Ccircle cx='1400' cy='400' r='350'/%3E%3Ccircle cx='1400' cy='400' r='410'/%3E%3C/g%3E%3C/svg%3E")}
 
-/* ---- top bar (always slim) ---- */
 #topbar{position:sticky;top:0;z-index:30;background:rgba(250,250,247,.86);backdrop-filter:blur(8px);
   border-bottom:1px solid var(--line);padding:12px 26px;display:flex;align-items:center;gap:16px}
 .brand{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap}
@@ -65,10 +53,8 @@ button{font-family:inherit;cursor:pointer}
 .wordmark{font-family:var(--serif);font-size:18px;letter-spacing:.1px;color:var(--ink)}
 .wordmark b{color:var(--leaf);font-weight:600}
 .navcluster{margin-left:auto}
-/* search mount inside the header, used only in results mode (empty on home) */
 .header-search{flex:1;max-width:600px;margin:0 12px}
 .header-search:empty{display:none}
-/* the search control itself (shared between hero + header) */
 .searchwrap{position:relative;display:flex;gap:8px;width:100%}
 .search-ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);
   color:var(--ink-faint);display:flex;pointer-events:none}
@@ -79,9 +65,7 @@ button{font-family:inherit;cursor:pointer}
 #searchBtn{background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--radius);
   padding:0 22px;font-weight:600;font-size:14px;transition:.15s}
 #searchBtn:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
-.stats{display:none}  /* corpus size lives in the feature cards / coverage view instead */
 
-/* ---- search-mode toggle (segmented control) ---- */
 .modetoggle{display:flex;gap:0;background:var(--panel);border:1px solid var(--line-strong);
   border-radius:var(--radius);overflow:hidden}
 .modebtn{background:none;border:none;color:var(--ink-dim);
@@ -91,7 +75,6 @@ button{font-family:inherit;cursor:pointer}
 .modebtn:hover{color:var(--ink);background:var(--panel2)}
 .modebtn.on{background:var(--accent);color:#fff}
 
-/* ---- nav button (Database / Parts) ---- */
 .navlink{display:inline-flex;align-items:center;gap:7px;background:var(--panel);
   border:1px solid var(--line-strong);color:var(--ink-dim);
   border-radius:var(--radius);padding:8px 14px;font-size:13px;font-weight:600;white-space:nowrap;transition:.15s}
@@ -100,33 +83,15 @@ button{font-family:inherit;cursor:pointer}
 .navlink .nav-ic{color:var(--accent)}
 .navcluster{display:flex;gap:8px;align-items:center;margin-left:auto;flex:none}
 
-/* ---- parts registry view ---- */
-#partsView{flex:1;min-width:0;padding:26px 26px 80px;max-width:1100px;margin:0 auto;width:100%}
-.parts-head h1{font-family:var(--serif);font-size:27px;font-weight:600;margin:0 0 6px}
-.parts-summary{color:var(--ink-dim);font-size:14px;margin:0 0 16px}
-#partsFilter{width:100%;max-width:560px;background:var(--panel);border:1px solid var(--line-strong);
-  border-radius:var(--radius);color:var(--ink);padding:11px 16px;font-size:15px;outline:none}
-#partsFilter:focus{border-color:var(--accent)}
-.parts-list{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:0 18px}
-.part-row{display:flex;align-items:baseline;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);min-width:0}
-.part-name{color:var(--ink);text-decoration:none;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.part-name:hover{text-decoration:underline;color:var(--accent)}
-.part-name.coded{color:var(--accent)}
-.part-id{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
-.part-count{font-size:12px;color:var(--ink-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
-
-/* ---- AI screening note ---- */
 .ai-note{margin:2px 0 12px;padding:8px 13px;border:1px solid var(--line);border-left:3px solid var(--accent);
   border-radius:var(--radius);background:var(--panel);color:var(--ink-dim);font-size:13px}
 .ai-note b{color:var(--ink)}
 .ai-note .link{margin-left:4px}
 
-/* ---- clickable parts inside the team drawer ---- */
 .partlink{color:var(--accent);text-decoration:none;font-weight:600}
 .partlink:hover{text-decoration:underline}
 .bba{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
 
-/* ---- layout ---- */
 main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 #facets{width:268px;flex:none;padding:22px 18px 60px;border-right:1px solid var(--line);
   position:sticky;top:73px;max-height:calc(100vh - 73px);overflow:auto}
@@ -134,21 +99,16 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .facets-head h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-faint);margin:0}
 #content{flex:1;min-width:0;padding:26px 28px 80px}
 
-/* ---- hero (home) ---- */
 .hero{max-width:1000px;margin:0 auto;text-align:center;padding:80px 20px 30px}
 .hero h1{font-family:var(--serif);font-weight:600;font-size:clamp(32px,4.3vw,48px);line-height:1.06;
   letter-spacing:-.022em;color:var(--ink);margin:0 0 13px;white-space:nowrap}
 @media(max-width:560px){.hero h1{white-space:normal}}
-/* corpus colophon - precise counts, spread to the exact width of the search bar */
-/* corpus colophon - centered, sits just above the blog posts */
 .hero-stats{margin:0 0 18px;display:flex;flex-wrap:wrap;justify-content:center;gap:3px 7px;
   font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:0;line-height:1.5}
-.hero-stats:empty{display:none}  /* no phantom gap before the stats load */
+.hero-stats:empty{display:none}
 .hero-stats .dot{color:var(--line-strong)}
 .hero h1 .hl{color:var(--leaf)}
-/* black-ink keywords in the headline + intro (was green) */
 .hero h1 .hl-k{color:var(--ink)}
-/* direct child only - must not leak into the blog paragraphs nested in .hero */
 .hero > p{max-width:690px;margin:0 auto 32px;color:var(--ink-dim);font-size:clamp(15px,1.8vw,18px);line-height:1.55}
 .hero > p .hl{color:var(--leaf);font-weight:600}
 .hero > p .hl-k{color:var(--ink);font-weight:600}
@@ -158,17 +118,14 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .hero-search .search-ic{left:17px}
 .hero-search #searchBtn{border-radius:10px;padding:0 26px;font-size:15px}
 
-/* "popular searches" row - stretched to the search-bar width, links spread across it */
 .examples{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:center;gap:10px;
   max-width:720px;width:100%;margin:14px auto 0;font-size:13px}
 .example{background:none;border:none;color:var(--accent);padding:0;font-size:13px;cursor:pointer;white-space:nowrap}
 .example:hover{text-decoration:underline}
 @media(max-width:620px){.examples{flex-wrap:wrap;justify-content:center;gap:8px 12px}}
 
-/* ---- blog (home) ---- */
 .blog{max-width:940px;margin:46px auto 0;text-align:left}
 .blog-list{display:flex;flex-direction:column;gap:18px}
-/* each post: thumbnail flush-left, text right; whole card is the click target */
 .post-card{display:grid;grid-template-columns:230px 1fr;gap:0;background:var(--panel);
   border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;
   cursor:pointer;text-align:left;transition:transform .18s,box-shadow .18s,border-color .18s}
@@ -192,7 +149,6 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
   .post-body{padding:0 24px 22px}
 }
 
-/* ---- blog "show more" down-arrow ---- */
 .blog-more{display:flex;justify-content:center;margin-top:26px}
 .blog-more:empty{display:none}
 .more-arrow{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -202,7 +158,6 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .more-arrow:hover{background:rgba(255,255,255,.9);color:var(--accent);
   border-color:var(--line-strong);transform:translateY(2px)}
 
-/* ---- blog reader (full-screen reading overlay) ---- */
 .blog-reader{position:fixed;inset:0;z-index:60;display:flex;justify-content:center;
   align-items:flex-start;overflow-y:auto;padding:40px 20px}
 .reader-bg{position:fixed;inset:0;background:rgba(25,28,32,.42);backdrop-filter:blur(3px)}
@@ -233,7 +188,6 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .reader-content img{max-width:100%;border-radius:var(--radius);margin:6px 0}
 @media(max-width:640px){.reader-panel{padding:40px 24px 44px}.reader-hero{height:200px}}
 
-/* ---- facet groups ---- */
 .facet-group{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
 .facet-group > h3{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--ink-dim);padding:10px 12px;background:var(--panel2);display:flex;justify-content:space-between;cursor:pointer}
@@ -246,7 +200,6 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .facet-item.on .cnt{color:var(--accent)}
 .facet-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* active chips */
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
 .chip{background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);
   border-radius:3px;padding:3px 9px;font-size:12px;display:flex;gap:6px;align-items:center;cursor:pointer}
@@ -254,7 +207,6 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 .chip:hover{background:#dce9e1}
 .chip .k{color:var(--ink-faint);font-size:10px;text-transform:uppercase}
 
-/* ---- results (catalog rows) ---- */
 .results-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;
   padding-bottom:8px;border-bottom:2px solid var(--ink);color:var(--ink-dim);font-size:13px}
 .sortnote{font-family:var(--mono);color:var(--ink-faint)}
@@ -289,19 +241,17 @@ main{display:flex;align-items:flex-start;gap:0;max-width:1280px;margin:0 auto}
 
 .empty{text-align:center;color:var(--ink-faint);padding:60px 0}
 
-/* ---- drawer ---- */
 .drawer{position:fixed;inset:0;z-index:50}
 .drawer-bg{position:absolute;inset:0;background:rgba(26,29,33,.4)}
 .drawer-panel{position:absolute;right:0;top:0;height:100%;width:min(1500px,99vw);
   background:var(--bg);border-left:1px solid var(--line-strong);overflow:auto;padding:26px 28px 60px;
   animation:slidein .18s ease;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(26,29,33,.08)}
-/* drag handle on the panel's left edge to resize the whole drawer (width persisted) */
 .drawer-resizer{position:absolute;top:0;bottom:0;right:min(1500px,99vw);width:12px;z-index:60;
   cursor:ew-resize;display:flex;align-items:center;justify-content:center}
 .drawer-resizer::before{content:"";width:4px;height:48px;border-radius:3px;background:var(--line-strong);transition:background .15s}
 .drawer-resizer:hover::before,body.resizing-drawer .drawer-resizer::before{background:var(--accent)}
 body.resizing-drawer{cursor:ew-resize;user-select:none}
-body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while crossing the wiki iframe */
+body.resizing-drawer iframe{pointer-events:none}
 @keyframes slidein{from{transform:translateX(30px);opacity:.4}to{transform:none;opacity:1}}
 .dh{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
 .dh h2{margin:0;font-family:var(--serif);font-weight:600;font-size:26px}
@@ -326,11 +276,9 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .mol{display:inline-block;background:var(--panel2);border:1px solid var(--line-strong);border-left:3px solid var(--warn);
   color:var(--ink);border-radius:3px;padding:2px 8px;font-size:13px;margin:0 5px 5px 0}
 
-/* ---- "summary needed" badge on legacy text-only cards ---- */
 .needs-sum{font-size:11px;color:var(--warn);border:1px solid var(--warn);
   border-radius:3px;padding:1px 7px;font-family:var(--mono);letter-spacing:.02em}
 
-/* ---- drawer tabs ---- */
 .dtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:10px 0 16px}
 .dtab{background:none;border:none;color:var(--ink-dim);padding:8px 13px;font-size:13px;
   border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
@@ -342,7 +290,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .dpane.workspace-pane{max-width:none}
 .dpane.workspace-pane.on{display:flex;flex:1;min-height:0}
 
-/* ---- workspace: live wiki (left) + Ask-AI chat (right) side by side ---- */
 .workspace{flex:1;min-height:0;display:grid;gap:18px;
   grid-template-columns:minmax(0,2.6fr) minmax(300px,1fr)}
 .wiki-col{display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -350,7 +297,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   border-left:1px solid var(--line);padding-left:18px}
 .ai-col .ai-log{flex:1;min-height:0;overflow:auto}
 
-/* ---- embedded wiki (live page via local proxy, or saved corpus text) ---- */
 .wiki-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-family:var(--mono);font-size:12px}
 .wiki-url{color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .wiki-modes{display:flex;gap:0;flex:none;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden}
@@ -369,7 +315,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   font-size:13.5px;line-height:1.6}
 .wiki-note{color:var(--ink-faint);font-size:12px;flex:none}
 
-/* ---- narrow screens: stack wiki over chat instead of side by side ---- */
 @media (max-width:1024px){
   .workspace{grid-template-columns:1fr;overflow:auto}
   .wiki-stage{height:58vh}
@@ -377,7 +322,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .ai-col .ai-log{overflow:visible}
 }
 
-/* ---- ask-AI pane (CLI-agent chat, grounded in the project wiki text) ---- */
 .ai-ctl{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .ai-field{display:flex;flex-direction:column;gap:4px;font-size:12px}
 .ai-flabel{color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em;font-size:11px}
@@ -423,21 +367,17 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .card-top .domain{margin-left:0;width:100%}
 }
 
-/* respect reduced-motion preference */
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
 }
 
-/* ---- the configurable page that replaced the old coverage view ---- */
 #customView{flex:1;min-height:calc(100vh - 69px)}
-#customFrame{width:100%;height:calc(100vh - 69px);border:0;background:var(--panel);display:block}
+#customFrame{width:100%;height:calc(100vh - 69px);border:0;background:var(--bg);display:block}
 
-/* ---- notice shown when the database repo is unreachable ---- */
 .data-note{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
   background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--radius);
   padding:9px 16px;font-size:13px;color:var(--ink-dim);box-shadow:0 4px 18px rgba(25,28,32,.10)}
 
-/* ---- phones: the filter sidebar becomes a slide-in panel ---- */
 .facets-scrim{position:fixed;inset:0;background:rgba(25,28,32,.34);z-index:39}
 .facets-close{display:none}
 @media(max-width:880px){
@@ -447,7 +387,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .header-search{order:3;flex-basis:100%;max-width:none;margin:0}
   #modeToggle{order:4}
   .wordmark{font-size:16px}
-  /* the sidebar becomes a slide-in panel, so it must not stay display:none */
   #facets{display:block;position:fixed;top:0;left:0;bottom:0;width:min(310px,86vw);
     z-index:40;background:var(--panel);max-height:none;overflow:auto;
     box-shadow:0 0 34px rgba(25,28,32,.18);
@@ -460,7 +399,7 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 @media(max-width:560px){
   .wordmark{font-size:15px}
   .brand .logo{font-size:20px}
-  #q{font-size:16px}            /* stops iOS zooming the page on focus */
+  #q{font-size:16px}
   #searchBtn{padding:0 14px}
   .hero h1{font-size:26px}
   .drawer-panel{width:100vw !important}
@@ -469,13 +408,9 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .tagrow{min-width:0}
 }
 
-/* =====================================================================
-   Home layout, matched to the reference: one left-aligned column,
-   a larger serif headline, and figures shown as small pills.
-   ===================================================================== */
 :root{ --bg:#f4f4ef; --line:#e4e3db; --line-strong:#d0cfc4; }
 
-.bg-contours{opacity:.35}            /* was competing with the content */
+.bg-contours{opacity:.35}
 
 .hero{max-width:1100px;margin:0;padding:76px 0 26px;text-align:left}
 #content{padding:26px 28px 90px;max-width:1180px;margin:0 auto}
@@ -487,7 +422,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   max-width:820px;margin:0 0 30px;text-align:left}
 .hero > p b, .hero > p .hl-k{font-weight:600;color:var(--ink)}
 
-/* search: one row, button kept as its own control */
 .hero-search{max-width:1040px}
 .hero-search .searchwrap{gap:12px}
 .hero-search #q{height:58px;padding:0 18px 0 48px;font-size:16.5px;border-radius:6px;
@@ -496,7 +430,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .hero-search #searchBtn{height:58px;padding:0 34px;border-radius:6px;font-size:16px;
   font-weight:600;background:var(--accent-strong);border-color:var(--accent-strong)}
 
-/* figures, as pills under the search box */
 .stats-row{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:18px 0 0}
 .stats-label{font-family:var(--sans);font-size:13.5px;color:var(--ink-dim);margin-right:2px}
 .hero-stats{display:flex;flex-wrap:wrap;gap:9px;text-align:left}
@@ -504,13 +437,11 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   background:#e9ece4;border:1px solid #dfe3d8;border-radius:999px;padding:7px 13px;
   white-space:nowrap;letter-spacing:0}
 
-/* section label above the article */
 .blog{margin-top:58px}
 .blog-label{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.12em;
   text-transform:uppercase;color:var(--accent);padding-bottom:8px;margin-bottom:20px;
   border-bottom:2px solid var(--accent);display:inline-block}
 
-/* the article card */
 .blog-list{display:block}
 .post-card{display:grid;grid-template-columns:292px 1fr;gap:0;align-items:stretch;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
@@ -540,15 +471,12 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .post-title{font-size:22px}
 }
 
-/* the article must line up with the headline, not sit in its own narrower column */
 .blog{max-width:none;margin-left:0;margin-right:0}
 .blog-list{max-width:none;margin:0}
 .post-card{max-width:none;margin:0}
 .blog-more{text-align:left;margin-top:18px}
 
-/* the search field inherits Arial from the UA otherwise */
 #q,#q::placeholder{font-family:var(--sans)}
-#partsFilter,#covFilter{font-family:var(--sans)}
 
 .stats-row{align-items:center}
 .stats-label{line-height:1}
@@ -563,15 +491,10 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .hero-search,.hero,.hero > p{max-width:none}
 }
 
-/* =====================================================================
-   Second pass: a step down in scale, the search box aligned with the
-   text, a mark before the figures, and a warmer card.
-   ===================================================================== */
 .hero{padding:60px 0 22px}
 .hero h1{font-size:50px;margin:0 0 17px}
 .hero > p{font-size:17.5px;line-height:1.6;max-width:760px;margin:0 0 26px}
 
-/* the old centred layout left a 30px margin here, which read as a gap */
 #heroSearch{margin:0;max-width:1000px}
 .hero-search #q{height:50px;font-size:15.5px;padding:0 16px 0 44px}
 .hero-search .search-ic{left:15px}
@@ -607,13 +530,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .post-title{font-size:20px}
 }
 
-/* =====================================================================
-   Third pass. Proportions and fills taken by measuring the reference
-   image (1772px wide) rather than by eye:
-     content column   60.2% of the viewport, starting at 20%
-     search row       58.4%
-     page  #f6f6ef · card #f9f8f5 · field #fcfbf7 · button #06412b
-   ===================================================================== */
 :root{ --bg:#f6f6ef; }
 
 #content{max-width:1122px;padding:26px 28px 90px}
@@ -628,31 +544,23 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .post-card{grid-template-columns:292px 1fr;background:#f9f8f5;border-color:#e3e1d7}
 .hero-stats .seg{background:#eff0e9;border-color:#e3e4dc}
 
-/* headline width to match the reference (50.1% of viewport), and a card with the
-   same vertical weight - its abstract wraps to two lines there, not one */
 .hero h1{font-size:52px}
 .post-thumb{min-height:250px}
 .post-body{padding:28px 34px 30px}
 .post-abstract{max-width:620px}
 
-/* The reference page has a plain ground, so the contour arcs go. One line to
-   bring back: change display to block. */
 .bg-contours{display:none}
 
-/* line breaks and the vertical rhythm, measured off the reference */
 .hero > p{max-width:775px;margin:0 0 34px}
 .blog{margin-top:58px}
 .blog-label{margin-bottom:13px}
 
-/* Playfair Display sits taller and narrower than Source Serif, so the headline
-   needs its own size to land on the reference's 50% of viewport width. */
 .hero h1{font-size:57px;line-height:1.1;letter-spacing:-.005em}
 .post-title{font-size:25px;line-height:1.22}
 .wordmark{font-size:17px}
 
 .hero h1{font-size:58px}
 
-/* break after "biological part," as the reference does */
 .hero > p{max-width:700px}
 
 .hero > p{font-size:19.5px;max-width:780px;line-height:1.58}
@@ -663,7 +571,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .wrap-wide{display:inline}
 @media(max-width:980px){.wrap-wide{display:none}}
 
-/* narrow screens, declared last so nothing above overrides them */
 @media(max-width:980px){
   .post-card{grid-template-columns:1fr}
   .post-thumb{min-height:170px;max-height:210px}
@@ -684,13 +591,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .hero-search #searchBtn{height:46px;padding:0 16px;font-size:14px}
 }
 
-/* =====================================================================
-   Fourth pass, all measured off the reference image:
-     headline face   now --serif in :root
-     search button   #1e5d43
-     bold year       the same grey as the rest of the sentence
-     article card    reference type sizes and padding
-   ===================================================================== */
 .hero > p b, .hero > p .hl-k{font-weight:700;color:inherit}
 
 .hero-search #searchBtn{background:#1e5d43;border-color:#1e5d43}
@@ -702,30 +602,19 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .post-abstract{font-size:16px;line-height:1.6;max-width:690px;margin:0 0 20px}
 .post-more{font-size:16.5px}
 .post-thumb{min-height:300px}
-/* the reference top-aligns the article text; ours was vertically centred */
 .post-body{justify-content:flex-start}
 .post-title{font-size:28.5px}
 .post-body{padding:29px 30px 26px 27px}
 .hero h1{font-size:54px}
 
-/* Let the text set the card's height so the space below it matches the space
-   above. The reference leaves ~108px under the text because its image block is
-   taller than the words; with our flat placeholder that just reads as a hole. */
 .post-thumb{min-height:150px}
 .post-body{padding:30px 30px 30px 27px}
 
-/* =====================================================================
-   Fifth pass: figures stretched to the search bar, a plainer navbar,
-   hairline rules, and a footer the database repo can rewrite.
-   ===================================================================== */
-
-/* 1. the figures share the search bar's width and end where it ends */
 .stats-row{max-width:1034px;gap:10px}
 .hero-stats{flex:1;gap:8px;flex-wrap:nowrap}
 .hero-stats .seg{flex:1 1 0;text-align:center;padding:7px 6px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 
-/* 2. navbar: same ground as the page, no mark, one weight for the wordmark */
 #topbar{background:var(--bg);backdrop-filter:none;border-bottom:1px solid var(--line);
   padding:16px 28px}
 .brand{gap:0}
@@ -738,11 +627,9 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .navlink:hover{color:var(--ink);border-color:var(--ink-faint)}
 .navcluster{display:flex;gap:10px;align-items:center}
 
-/* 3. hairline rules */
 .blog-label{border-bottom:none;padding-bottom:0;margin-bottom:11px;display:block}
 .blog-rule{border:0;border-top:1px solid var(--line);margin:0 0 22px}
 
-/* 4. footer */
 .site-footer{border-top:1px solid var(--line);margin-top:70px}
 .footer-inner{max-width:1122px;margin:0 auto;padding:26px 28px 42px;
   display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline}
@@ -761,31 +648,21 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .footer-inner{padding:22px 16px 34px}
 }
 
-/* =====================================================================
-   Sixth pass: figures aligned to the field (not the button), a bolder
-   wordmark, a footer with real structure, and a blog list that holds up
-   when there are many posts.
-   ===================================================================== */
-
-/* the figures stop where the input stops - the button sits beyond it */
 .stats-row{max-width:909px}
 
 .wordmark b{font-weight:700;color:var(--ink)}
 
-/* article list */
 .blog-list{display:flex;flex-direction:column;gap:18px}
 .blog-more{text-align:left;margin-top:22px}
 .blog-more-btn{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--accent);
   background:transparent;border:1px solid var(--line-strong);border-radius:6px;padding:9px 18px}
 .blog-more-btn:hover{border-color:var(--accent);background:var(--panel)}
-/* past the first article the cards are quieter, so a long list stays readable */
 .post-card + .post-card{background:transparent;border-color:var(--line)}
 .post-card + .post-card .post-thumb{min-height:132px}
 .post-card + .post-card .post-title{font-size:22px}
 .post-card + .post-card .post-body{padding:22px 26px 22px 24px}
 .post-card + .post-card{grid-template-columns:214px 1fr}
 
-/* footer */
 .site-footer{border-top:1px solid var(--line);margin-top:78px;background:transparent}
 .footer-inner{max-width:1122px;margin:0 auto;padding:34px 28px 24px;
   display:grid;grid-template-columns:1fr auto;gap:28px 48px;align-items:start}
@@ -812,19 +689,13 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 }
 
 .footer-note{max-width:530px}
-/* grow from the natural width so the longest figure is never clipped */
 .hero-stats .seg{flex:1 1 auto;overflow:visible;text-overflow:clip}
 
-/* =====================================================================
-   Seventh pass: a drawn bacterium mark, an unbolded wordmark, a footer
-   that runs the full width, and the last-updated stamp.
-   ===================================================================== */
 .brand{display:flex;align-items:center;gap:9px}
 .logo{display:inline-flex;align-items:center;color:var(--accent);line-height:0}
 .wordmark b{font-weight:400}
 .wordmark{font-weight:400}
 
-/* the footer spans the window, not just the reading column */
 .footer-inner,.footer-bottom{max-width:none;padding-left:40px;padding-right:40px}
 .footer-links{gap:9px 22px}
 .footer-pair{font-family:var(--sans);font-size:14px;color:var(--ink-dim)}
@@ -837,7 +708,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .footer-inner,.footer-bottom{padding-left:16px;padding-right:16px}
 }
 
-/* images inside a post, so a story can carry several of them */
 .reader-content figure{margin:26px 0}
 .reader-content img{display:block;width:100%;height:auto;border:1px solid var(--line);
   border-radius:8px}
@@ -852,13 +722,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .logo svg{display:block}
 .reader-meta{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
 
-/* =====================================================================
-   Eighth pass: every article styled alike, a footer that reads as one
-   block again, and the search / project pages brought onto the same
-   visual footing as the home page.
-   ===================================================================== */
-
-/* --- articles: no special casing after the first --- */
 .post-card + .post-card{background:#f9f8f5;border-color:#e3e1d7}
 @media(min-width:981px){
   .post-card + .post-card{grid-template-columns:292px 1fr}
@@ -866,15 +729,14 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .post-card + .post-card .post-title{font-size:28.5px}
   .post-card + .post-card .post-body{padding:30px 30px 30px 27px}
 }
+.post-thumb{aspect-ratio:16/10}
 
-/* --- footer: the band and its content both span the window --- */
 .footer-inner,.footer-bottom{max-width:none;padding-left:40px;padding-right:40px}
 .footer-inner{grid-template-columns:1fr auto;gap:24px 56px;padding-top:32px;padding-bottom:22px}
 .footer-links{flex-direction:row;flex-wrap:wrap;text-align:left;gap:8px 22px;
   align-items:baseline;justify-content:flex-end;max-width:520px}
 .footer-bottom{padding-top:14px;padding-bottom:32px}
 
-/* --- search results, matched to the article cards --- */
 #results .card{background:#f9f8f5;border:1px solid #e3e1d7;border-radius:10px;
   padding:20px 24px;margin:0 0 14px;box-shadow:none;transition:border-color .15s}
 #results .card:hover{border-color:var(--line-strong)}
@@ -897,7 +759,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .needs-sum{font-family:var(--sans);font-size:11px;letter-spacing:.04em;text-transform:uppercase;
   color:var(--amber);background:transparent;border:none;padding:0}
 
-/* --- filters --- */
 @media(min-width:881px){#facets{background:transparent}}
 .facets-head h2{font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.11em;
   text-transform:uppercase;color:var(--ink-faint)}
@@ -907,7 +768,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .facet-item .cnt{font-family:var(--sans);font-size:11.5px;color:var(--ink-faint)}
 .chip{font-family:var(--sans);border-radius:999px}
 
-/* --- project panel --- */
 .drawer-panel{background:var(--bg)}
 .dh h2{font-family:var(--serif);font-size:26px;font-weight:600}
 .dh .year{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink-faint)}
@@ -924,7 +784,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .mol{font-family:var(--sans);font-size:12.5px;border-radius:999px;background:#eff0e9;
   border:1px solid #e3e4dc;padding:4px 11px}
 
-/* --- wiki + ask ai --- */
 .wiki-bar{font-family:var(--sans)}
 .wiki-url{font-family:var(--sans);font-size:12.5px;color:var(--ink-faint)}
 .wiki-mode{font-family:var(--sans);font-size:13px}
@@ -937,8 +796,14 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .ai-send{font-family:var(--sans);font-weight:600;border-radius:6px;background:#1e5d43;
   border-color:#1e5d43}
 .ai-key{font-family:var(--sans);border-radius:6px}
+.ai-url{background:var(--panel);border:1px solid var(--line-strong);color:var(--ink);font-family:var(--sans);
+  border-radius:6px;padding:7px 10px;font-size:13px;outline:none;min-width:0}
+.ai-url:focus{border-color:var(--accent)}
+.ai-url::placeholder{color:var(--ink-faint)}
+.ai-field .ai-model-name{width:190px}
+.ai-baserow{margin-bottom:8px}
+.ai-baserow .ai-url{width:100%}
 
-/* --- facet lists: stop cutting a row in half, and show the scroll is there --- */
 .facet-group{background:transparent;border-color:#e3e1d7}
 .facet-list{max-height:252px;padding:6px 10px 10px;
   -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent 100%);
@@ -947,36 +812,22 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 .facet-list::-webkit-scrollbar-thumb{background:#d8d6cb;border-radius:3px}
 .facet-item{padding:5px 2px}
 
-/* --- project meta reads as one line of separated facts --- */
 .dmeta > *:not(:first-child)::before{content:"·";color:var(--ink-faint);margin-right:16px}
 
-/* --- footer bottom: legal left, stamp right --- */
 .footer-bottom{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 28px}
 .footer-legal{margin:0;flex:1 1 380px}
 .footer-stamp{display:flex;gap:18px;align-items:baseline;margin:0}
 
-/* the pre-2022 layout warning is a note, not an answer from the model */
 .ai-layout-note{font-family:var(--sans);font-size:12.5px;line-height:1.55;color:var(--ink-dim);
   padding:9px 12px;margin:0 0 10px;border:1px solid #e3e1d7;border-radius:8px;background:#f2f1ea}
 
-/* =====================================================================
-   Tenth pass: the phone. Everything above was measured on a wide screen,
-   and a few of those rules set a fixed grid with no width guard, so they
-   leaked down here and broke the layout. This block is the last word on
-   small screens.
-   ===================================================================== */
-
-/* the mark and the name read as one thing */
 .brand{gap:5px}
 
-/* the dot belongs to the fact before it, not the one after - with ::before
-   a wrapped line started with a stray "·" */
 .dmeta > *:not(:first-child)::before{content:none}
 .dmeta > *:not(:last-child)::after{content:"·";color:var(--ink-faint);margin-left:14px}
 .dmeta{gap:6px 14px}
 
 @media(max-width:980px){
-  /* footer stacks: the note, then the links under it */
   .footer-inner{grid-template-columns:1fr;gap:18px;padding:26px 16px 18px}
   .footer-links{justify-content:flex-start;max-width:none;gap:9px 20px}
   .footer-note{max-width:none}
@@ -986,12 +837,9 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 }
 
 @media(max-width:880px){
-  /* the slide-in panel is the same paper as the page, not a white sheet */
   #facets{background:var(--bg);width:min(330px,88vw);padding:18px 16px 60px}
   .facets-head{margin-bottom:6px}
 
-  /* four stacked rows ate half the screen before any content. The name gets
-     its own row, then the buttons and the mode switch share one. */
   #topbar{padding:11px 16px;gap:8px 10px}
   .brand{flex:1 1 100%;min-width:0}
   .wordmark{overflow:hidden;text-overflow:ellipsis}
@@ -1002,33 +850,22 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .header-search{order:4}
   .header-search .searchwrap{gap:8px}
 
-  /* two columns at this width leaves both of them half empty */
   .results-head{display:block}
   .results-head .sortnote{display:block;margin:5px 0 0}
 
-  /* the wiki toolbar ran the "open in new tab" button off the screen; the url
-     drops to its own line and the two controls share the first one */
   .wiki-bar{flex-wrap:wrap;gap:8px}
   .wiki-url{flex:1 1 100%;order:3}
   .wiki-open{margin-left:auto;padding:5px 11px;font-size:12px}
   .wiki-mode{padding:5px 9px;font-size:12px}
 
-  /* on the home page the mode switch is hidden, so the buttons would be left
-     stranded on the left of an otherwise empty row */
   #topbar:not(:has(#modeToggle:not([hidden]))) .navcluster{margin-left:auto}
 }
 
 @media(max-width:560px){
-  /* figures get their own line - sharing one with the label left a ragged
-     two-column grid */
   .stats-row{gap:8px 10px}
   .hero-stats{flex-basis:100%;gap:7px}
   .hero-stats .seg{flex:0 1 auto}
 
-  /* The drawer is built as nested flex boxes that scroll inside themselves,
-     which is right on a desktop and wrong on a phone - the wiki frame got
-     squeezed to a sliver and the chat drew on top of it. Drop the whole
-     thing back to normal document flow and let the panel scroll. */
   .dpane.workspace-pane.on{display:block}
   .workspace{display:block;overflow:visible;height:auto}
   .wiki-col,.wiki-stage{display:block;height:auto;min-height:0}
@@ -1046,7 +883,6 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 }
 
 @media(max-width:400px){
-  /* the two mode labels plus both nav buttons only just fit on one row here */
   .navlink{padding:6px 10px;font-size:12.5px}
   .modebtn{padding:7px 8px;font-size:11.5px}
   #topbar{padding:11px 13px}
@@ -1054,30 +890,19 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
 }
 
 @media(max-width:420px){
-  /* the search field would not shrink below its default 20-character size and
-     pushed the button off the screen */
   .header-search,.searchwrap,#q{min-width:0}
   #q{flex:1 1 0}
 }
 
 @media(max-width:380px){
-  /* "Concept + Keyword" does not fit beside the nav buttons this narrow */
   .mode-tail{display:none}
 }
 
-/* the filter panel slides off-canvas on a phone, and the active filters live
-   inside it - so repeat them above the results where they can be seen */
 .chips-narrow{display:none}
 @media(max-width:880px){
   .chips-narrow:not(:empty){display:flex;margin:0 0 14px}
 }
 
-/* =====================================================================
-   Eleventh pass: four things that only went wrong on a phone.
-   ===================================================================== */
-
-/* the name and the nav button share the first row, so the name sits in the
-   middle of the bar instead of being pinned to the top of an empty one */
 @media(max-width:880px){
   .brand{flex:0 1 auto;min-width:0}
   .wordmark{font-size:16.5px}
@@ -1085,20 +910,15 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   #customBtn{padding:5px 10px;font-size:12.5px}
   #topbar{align-items:center}
 
-  /* one line per credit, the way you would write them out */
   .footer-pair{flex:1 1 100%}
   .fsent{display:block}
 }
 
 @media(max-width:560px){
-  /* the figures read as a list, so they start at the left margin */
   .hero-stats{justify-content:flex-start}
 
-  /* every article title the same size, the way they are on a wide screen -
-     the first card was still running at the desktop size */
   .post-card .post-title,.post-card + .post-card .post-title{font-size:23px;line-height:1.24}
 
-  /* six figures wrapped onto three lines; two is the most that looks tidy */
   .hero-stats{gap:6px}
   .hero-stats .seg{font-size:11px;padding:5px 9px}
 }
@@ -1108,21 +928,15 @@ body.resizing-drawer iframe{pointer-events:none}  /* keep drag alive while cross
   .hero-stats .seg{font-size:10.5px;padding:5px 8px}
 }
 
-/* =====================================================================
-   Twelfth pass: section titles in the project panel. Ten identical green
-   caps labels read like a generated report; a serif italic reads like a book.
-   ===================================================================== */
 .sect h4{margin:24px 0 6px;font-family:var(--serif);font-size:15px;font-weight:400;font-style:italic;
   letter-spacing:0;text-transform:none;color:var(--ink-dim);line-height:1.4}
 .sect ul.refs li{font-size:14px;color:var(--ink-dim)}
 .sect a,.ai-msg a,.wiki-text a{color:var(--accent);text-decoration:none;overflow-wrap:anywhere}
 .sect a:hover,.ai-msg a:hover,.wiki-text a:hover{text-decoration:underline}
 
-/* the wiki address in the bar is a link now */
 a.wiki-url{text-decoration:none}
 a.wiki-url:hover{color:var(--accent);text-decoration:underline}
 
-/* find in the saved text */
 .wiki-find{display:flex;align-items:center;gap:6px;flex:none;flex-wrap:wrap}
 .find-q{flex:0 1 260px;min-width:0;font-family:var(--sans);font-size:13.5px;color:var(--ink);
   background:var(--panel);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:5px 9px}
@@ -1142,10 +956,6 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
   .find-go,.find-step{padding:5px 8px}
 }
 
-/* =====================================================================
-   Thirteenth pass: softer labels. Small spaced-out capitals on every label
-   felt mechanical next to a book face; they are ordinary words now.
-   ===================================================================== */
 .facets-head h2,.facet-group h3,.facet-group > h3,.card-top .domain,.blog-label,.post-meta,.reader-meta,
 .ai-flabel,.needs-sum,.chip .k{text-transform:none;letter-spacing:0}
 .facets-head h2{font-size:14px;font-weight:700;color:var(--ink-dim)}
@@ -1155,33 +965,18 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
 .post-meta,.reader-meta{font-size:13px;font-weight:600}
 .ai-flabel{font-size:12.5px;font-weight:600}
 
-/* =====================================================================
-   Fifteenth pass: line up with the original layout.
-   ===================================================================== */
-/* the name in its original face */
 .wordmark{font-family:"Merriweather",Georgia,serif}
 .footer-name{font-family:"Merriweather",Georgia,serif;font-weight:700}
 
-/* Literata's lowercase is shorter than Merriweather's, which made the bold
-   titles look squat. A small vertical stretch brings them back up; transform
-   leaves the layout box alone, so nothing moves. */
-.hero h1,.post-title,.reader-panel h1,.dh h2,.card-top .name,#resultCount,.parts-head h1{
+.hero h1,.post-title,.reader-panel h1,.dh h2,.card-top .name,#resultCount{
   transform:scaleY(1.08);transform-origin:50% 60%}
 
-/* the relabelled lines keep the old line heights */
 .blog-label{line-height:16.5px}
 .post-meta{line-height:18px}
 
-/* the arrow comes from a fallback font with taller metrics; pin the line so
-   the button stays the height it was */
 .blog-more-btn{line-height:17px}
-/* never split the year range at its hyphen */
 #heroYears{white-space:nowrap}
 
-/* =====================================================================
-   Sixteenth pass: filter panel. Titles line up with the rows under them,
-   and the less used groups wait behind one button.
-   ===================================================================== */
 .facet-group h3,.facet-group > h3{padding:11px 12px 4px}
 .facet-toggle{display:block;width:100%;margin:0 0 14px;padding:8px 12px;text-align:left;
   font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--accent);
@@ -1189,11 +984,8 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
 .facet-toggle::after{content:" ▾";color:var(--ink-faint)}
 .facet-toggle[aria-expanded="true"]::after{content:" ▴"}
 .facet-toggle:hover{border-color:var(--accent);background:var(--panel)}
-/* reaching the end of the filters does not start scrolling the page */
 @media(min-width:881px){#facets{overscroll-behavior:contain}}
 
-/* the ☰ button in the filter column; folded, the column is a narrow strip
-   holding only that button */
 .facets-toggle{flex:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
   padding:0;margin-right:10px;background:var(--panel);color:var(--ink-dim);border:1px solid var(--line-strong);border-radius:var(--radius)}
 .facets-toggle:hover{border-color:var(--accent);color:var(--accent)}
@@ -1208,7 +1000,6 @@ mark.find-hit.cur{background:#dcae3f;box-shadow:0 0 0 1px #9a6a1e}
   #facets.collapsed .facets-toggle{margin:0}
 }
 
-/* the AI chat folds to a strip holding only its ☰ button, like the filters */
 .ai-head{display:flex;align-items:center;flex:none;margin-bottom:10px}
 .ai-title{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--ink-dim)}
 .ai-body{display:flex;flex-direction:column;flex:1;min-height:0}

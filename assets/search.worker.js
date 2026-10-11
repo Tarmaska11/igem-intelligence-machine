@@ -1,5 +1,4 @@
 "use strict";
-/* Search runs here so typing never freezes the page. */
 
 const K1 = 3, B = 0.55;
 const TOKEN = /[a-z0-9]{2,32}/g;
@@ -7,10 +6,9 @@ const ABBREV = /\b([a-z])\.\s*([a-z]{3,})\b/g;
 const COMPOUND = /[a-z0-9]+(?:[-_][a-z0-9]+)+/g;
 
 let CARDS = null, INDEX = null, FACETS = null, LSA = null;
-let FT = null;              // full-text: {base, shards:Map}
+let FT = null;
 let ftBase = null;
 
-/* Same rule as tokens() in pipeline/build.py - "E. coli" also yields "ecoli". */
 function tokenize(text) {
   const t = (text || "").toLowerCase();
   const out = t.match(TOKEN) || [];
@@ -21,8 +19,6 @@ function tokenize(text) {
   return out;
 }
 
-/* Each group is a list of complete spellings. A spelling with several words means
-   all of its words must be present, so no single common word can carry the group. */
 const SYNONYMS = [
   ["escherichia coli", "ecoli"],
   ["saccharomyces cerevisiae", "scerevisiae", "budding yeast"],
@@ -37,14 +33,17 @@ const SYNONYMS = [
   ["golden gate", "goldengate"],
   ["heavy metal", "heavy metals"],
   ["polyethylene terephthalate", "pet plastic"],
-  ["quorum sensing", "quorum"],
-  ["site directed mutagenesis", "site-directed mutagenesis"],
+  ["quorum sensing", "quorum", "qs"],
+  ["bacillus thuringiensis", "bt"],
+  ["site directed mutagenesis", "sitedirected mutagenesis"],
   ["western blot", "western blotting", "immunoblot"],
   ["flow cytometry", "facs"],
   ["mass spectrometry", "mass spec"],
   ["high performance liquid chromatography", "hplc"],
   ["enzyme linked immunosorbent assay", "elisa"],
-  // mined from the summaries by pipeline/mine_synonyms.py
+];
+
+const ABBREVIATIONS = [
   ["adaptive laboratory evolution", "ale"],
   ["african swine fever", "asf"],
   ["amoebic gill disease", "agd"],
@@ -209,18 +208,51 @@ const SYNONYMS = [
   ["zosteric acid", "za"],
 ];
 
+const COMMON_WORDS = new Set(["her", "tip", "pad", "rip", "lam", "gam", "cad"]);
+const GROUPS = SYNONYMS.slice();
 const GROUP_OF = new Map();
 SYNONYMS.forEach((forms, gi) => {
   forms.forEach((f) => GROUP_OF.set(f, gi));
 });
+for (const [long, short] of ABBREVIATIONS) {
+  if (short.length < 3 || COMMON_WORDS.has(short) || GROUP_OF.has(short)) continue;
+  const gi = GROUP_OF.get(long);
+  GROUPS.push(gi === undefined ? [long, short] : GROUPS[gi].concat([short]));
+  GROUP_OF.set(short, GROUPS.length - 1);
+}
 
-/* A query becomes a list of units. Every unit must match (AND); inside a unit the
-   spellings are alternatives (OR). */
+const PIECE = /[a-z0-9]+(?:[-_][a-z0-9]+)+|[a-z0-9]+/g;
+
 function parseQuery(q) {
   const raw = (q || "").toLowerCase().trim();
   if (!raw) return [];
-  const words = tokenize(raw);
   const units = [];
+  let words = [];
+  for (const piece of raw.match(PIECE) || []) {
+    if (!/[-_]/.test(piece)) {
+      words.push(...(piece.match(TOKEN) || []));
+      continue;
+    }
+    addWords(words, units);
+    words = [];
+    const parts = piece.match(TOKEN) || [];
+    const joined = piece.replace(/[-_]/g, "");
+    const unit = [];
+    if (parts.length) unit.push({ w: parts, m: 1 });
+    if (joined.length > 1) unit.push({ w: [joined], m: 1 });
+    if (unit.length) {
+      unit.label = piece;
+      units.push(unit);
+    }
+  }
+  let m;
+  ABBREV.lastIndex = 0;
+  while ((m = ABBREV.exec(raw)) !== null) words.push(m[1] + m[2]);
+  addWords(words, units);
+  return units;
+}
+
+function addWords(words, units) {
   let i = 0;
   while (i < words.length) {
     let matched = false;
@@ -228,7 +260,7 @@ function parseQuery(q) {
       const phrase = words.slice(i, i + len).join(" ");
       const gi = GROUP_OF.get(phrase);
       if (gi !== undefined) {
-        units.push(SYNONYMS[gi].map((f) => ({ w: f.split(" "), m: 1 })));
+        units.push(GROUPS[gi].map((f) => ({ w: f.split(" "), m: 1 })));
         units[units.length - 1].label = phrase;
         i += len;
         matched = true;
@@ -245,36 +277,24 @@ function parseQuery(q) {
       i++;
     }
   }
-  return units;
 }
 
-/* Plurals. "spider" and "spiders" are separate words in the index, so a search for
-   one misses the other - and on a multi-word query that loses most of the results,
-   because every word has to match something.
-
-   The rule is derived from the index itself rather than a word list: strip a plural
-   ending, and keep the pair only if the singular is already a term the corpus uses
-   often. That is what stops sars -> sar and genes -> gen, without anyone having to
-   maintain a list of exceptions. */
 const FOLD_MIN_DF = 20;
-// a plural only found through folding counts for less, so a record that
-// actually uses the word typed still comes first
 const FOLD_WEIGHT = 0.35;
-let FOLDS = null;   // term -> every spelling in its group
+let FOLDS = null;
 
 function stemOf(w, minDf) {
   const terms = INDEX.terms;
-  for (const [suf, rep] of [["ies", "y"], ["es", ""], ["s", ""]]) {
+  for (const [suf, rep] of [["ies", "y"], ["s", ""], ["es", ""]]) {
     if (w.endsWith(suf) && w.length - suf.length >= 3) {
       const c = w.slice(0, w.length - suf.length) + rep;
+      if (suf === "es" && !/(s|x|z|ch|sh)$/.test(c)) continue;
       if (c !== w && terms[c] && terms[c][0].length >= minDf) return c;
     }
   }
   return null;
 }
 
-/* What a typed word should look for. A word the corpus never uses still folds, so
-   typing a plural the teams never wrote still finds the singular. */
 function spellingsFor(w) {
   const g = FOLDS && FOLDS.get(w);
   if (g) return g;
@@ -297,11 +317,8 @@ function buildFolds() {
   }
 }
 
-/* "casein and milk OR bovine albumin" becomes two groups. Everything inside a group
-   has to match; a record only needs one group. AND is what a plain space already
-   does, so it is allowed mainly so a query reads the way people write it. */
 function parseGroups(q) {
-  const raw = (q || "").trim();
+  const raw = (q || "").trim().replace(/^(?:(?:and|or)(?:\s+|$))+|(?:(?:^|\s+)(?:and|or))+$/gi, "").trim();
   if (!raw) return [];
   const groups = [];
   for (const part of raw.split(/\s+or\s+/i)) {
@@ -321,7 +338,6 @@ function postings(term) {
   return { ids, weights };
 }
 
-/* Score one spelling: all of its words must be in the document. */
 function scoreSpelling(words, acc, allow, mult) {
   const lists = [];
   for (const w of words) {
@@ -364,8 +380,6 @@ function runUnits(units, allow) {
     return acc;
   });
   if (!perUnit.length) return null;
-  // every word has to be there. A query that matches nothing returns nothing -
-  // widening it on the reader's behalf would make "and" mean something else.
   let ids = null;
   for (const acc of perUnit) {
     if (ids === null) ids = new Set(acc.keys());
@@ -381,8 +395,6 @@ function runUnits(units, allow) {
   return { scored, mode: "all" };
 }
 
-/* One group is the ordinary case and goes straight through. With several, a record
-   keeps its best group's score. */
 function runGroups(groups, allow) {
   if (groups.length === 1) return runUnits(groups[0], allow);
   const best = new Map();
@@ -412,12 +424,13 @@ function allowedByFilters(filters) {
   return allow;
 }
 
-/* Every id that matches the query inside the allowed set, best first. */
 async function rank(msg, groups, allow) {
   let ids, scores = null, matchMode = null, wikiOnly = new Set(), wikiCount = new Map(),
       relatedOnly = new Set(), usedMode = "lexical";
 
-  if (!groups.length) {
+  if (!groups.length && (msg.q || "").trim()) {
+    ids = [];
+  } else if (!groups.length) {
     ids = allow ? Array.from(allow) : CARDS.map((_, i) => i);
     ids.sort((a, b) => (CARDS[b].year - CARDS[a].year) ||
                        CARDS[a].team_name.localeCompare(CARDS[b].team_name));
@@ -445,9 +458,6 @@ async function rank(msg, groups, allow) {
   return { ids, matchMode, usedMode, wikiOnly, wikiCount, relatedOnly };
 }
 
-/* A section with something ticked counts against the other sections' filters
-   only. Otherwise ticking 2024 would hide every other year, and you could never
-   pick a second one. */
 async function ownFilterPools(msg, groups) {
   const pools = {};
   const f = msg.filters || {};
@@ -478,9 +488,6 @@ function facetCounts(resultIds, pools) {
   return out;
 }
 
-/* Document lengths for the wiki arm. Without them a 350k-word wiki outranks a
-   focused one just for being long. An older database repo may not have the file,
-   and then the arm falls back to plain tf-idf the way it used to. */
 async function loadWikiMeta() {
   if (!ftBase) return null;
   if (!FT.meta) {
@@ -495,7 +502,7 @@ async function loadWikiMeta() {
           const text = await new Response(
             r.body.pipeThrough(new DecompressionStream("gzip"))).text();
           return JSON.parse(text);
-        } catch (e) { /* try the next origin */ }
+        } catch (e) {  }
       }
       return null;
     })();
@@ -511,37 +518,31 @@ async function loadShard(term) {
       for (const base of ftBase) {
         try {
           const url = base + "fulltext/index/" + String(h).padStart(3, "0") + ".json.gz";
-          // a slow shard must never hold up the results the page already has
           const ctl = new AbortController();
           const timer = setTimeout(() => ctl.abort(), 8000);
           const r = await fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(timer));
           if (!r.ok) continue;
           const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
           return JSON.parse(text);
-        } catch (e) { /* try the next origin */ }
+        } catch (e) {  }
       }
       return null;
     })());
   }
-  return FT.shards.get(h);
+  const got = await FT.shards.get(h);
+  if (got === null && FT.shards.has(h)) FT.shards.delete(h);
+  return got;
 }
 
-/* The raw-wiki recall arm. A team whose summary missed the word but whose wiki
-   contains it still turns up, below every summary hit.
-
-   These are ordered by how many times the words turn up, not by BM25. BM25 is built
-   for density, and on whole wikis that put a 500-word stub with two mentions above
-   a full wiki with seventy. Plurals and synonyms of a word are added together, with
-   no discount for the form you did not type. With several words the order follows
-   the rarest one, so 200 "silk" and 1 "spider" does not top "spider silk". Ties go
-   to the shorter wiki. The number shown on the card is the number sorted on. */
 async function wikiTail(units, allow, primary) {
   if (!ftBase || !units.length) return [];
   const wanted = new Set();
   for (const unit of units) for (const sp of unit) for (const w of sp.w) wanted.add(w);
+  if (wanted.size > 32) return [];
   const shards = new Map();
   await Promise.all(Array.from(wanted).map(async (w) => { shards.set(w, await loadShard(w)); }));
   const wmeta = await loadWikiMeta();
+  if (wmeta && wmeta.n !== CARDS.length) return [];
   const wdl = wmeta && wmeta.dl;
 
   const listOf = (w) => {
@@ -555,8 +556,6 @@ async function wikiTail(units, allow, primary) {
     return { ids, tfs };
   };
 
-  // mentions per team for each unit, adding up its spellings; a spelling of
-  // several words counts as often as its least used word
   const perUnit = [];
   for (const unit of units) {
     const hit = new Map();
@@ -614,8 +613,6 @@ function byMentions(a, b) {
   return b.n - a.n || b.sum - a.sum || a.len - b.len || a.id - b.id;
 }
 
-/* Same grouping as runGroups, on the wiki arm. A team found by two groups keeps
-   whichever group mentions it more. */
 async function wikiTailGroups(groups, allow, primary) {
   const best = new Map();
   for (const units of groups) {
@@ -628,14 +625,12 @@ async function wikiTailGroups(groups, allow, primary) {
   return { ids: out.map((x) => x.id), count: new Map(out.map((x) => [x.id, x])) };
 }
 
-/* Must match shard_of() in pipeline/build.py. */
 function shardOf(term) {
   let h = 5381;
   for (let i = 0; i < term.length; i++) h = (Math.imul(h, 33) + term.charCodeAt(i)) >>> 0;
   return h % 256;
 }
 
-/* A short passage around the first query word, like the old server snippet. */
 function snippet(text, words) {
   const t = (text || "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1").replace(/\s+/g, " ").trim();
@@ -652,7 +647,6 @@ function snippet(text, words) {
   return (start ? "… " : "") + t.slice(start, end) + (end < t.length ? " …" : "");
 }
 
-/* ---- concept space (LSA), same model as the desktop build, quantised to int8 ---- */
 const LSA_STOP = new Set(("a an and are as at be by for from has have had he her his in into is it its of " +
   "on or that the their them they this to was were will with we our us you your i me my been being do does " +
   "did doing but not no nor so than then too very can could should would may might must shall about above " +
@@ -690,7 +684,6 @@ function setLsa(model) {
   };
 }
 
-/* Project a query into concept space, then cosine against every record. */
 function semanticScores(q) {
   if (!LSA) return null;
   const counts = new Map();
@@ -722,19 +715,9 @@ function semanticScores(q) {
   return out;
 }
 
-const RRF_C = 60, SEM_TOPN = 400;
-// the keyword ranking is the more reliable of the two, so the concept ranking
-// nudges it rather than getting an equal vote
-// a cosine below this is not relatedness, just noise
+const SEM_TOPN = 400;
 const SEM_MIN = 0.12;
 
-/* Concept mode adds related teams below the keyword ones instead of reordering them.
-
-   Fusing the two rankings was measurably worse than plain keyword search on every
-   set: the concept ranking is the weaker of the two, and reciprocal rank fusion
-   gives it an equal vote, so it pulled good keyword hits down. Appending cannot do
-   that - the keyword order is untouched and the concept arm only adds what keyword
-   search missed, which is what the mode says it does. */
 function conceptTail(lexIds, sem, allow, primary) {
   const pool = [];
   for (let i = 0; i < sem.length; i++) {
@@ -745,31 +728,6 @@ function conceptTail(lexIds, sem, allow, primary) {
   }
   pool.sort((a, b) => b[1] - a[1]);
   return pool.slice(0, SEM_TOPN).map((x) => x[0]);
-}
-
-/* Reciprocal rank fusion of the keyword ranking and the concept ranking. */
-function fuse(lexIds, sem, allow) {
-  const lexRank = new Map();
-  lexIds.forEach((id, i) => lexRank.set(id, i + 1));
-  const pool = [];
-  for (let i = 0; i < sem.length; i++) {
-    if (allow && !allow.has(i)) continue;
-    pool.push([i, sem[i]]);
-  }
-  pool.sort((a, b) => b[1] - a[1]);
-  const semRank = new Map();
-  pool.slice(0, SEM_TOPN).forEach(([id], i) => semRank.set(id, i + 1));
-
-  const all = new Set([...lexRank.keys(), ...semRank.keys()]);
-  const scored = [];
-  for (const id of all) {
-    let s = 0;
-    if (lexRank.has(id)) s += 1 / (RRF_C + lexRank.get(id));
-    if (semRank.has(id)) s += SEM_W / (RRF_C + semRank.get(id));
-    scored.push([id, s]);
-  }
-  scored.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  return scored.map((x) => x[0]);
 }
 
 self.onmessage = async (ev) => {
@@ -799,49 +757,54 @@ self.onmessage = async (ev) => {
   }
 
   if (msg.type === "search") {
-    const t0 = performance.now();
-    const allow = allowedByFilters(msg.filters);
-    const groups = parseGroups(msg.q);
-    const { ids, matchMode, usedMode, wikiOnly, wikiCount, relatedOnly } =
-      await rank(msg, groups, allow);
+    try {
+      const t0 = performance.now();
+      const allow = allowedByFilters(msg.filters);
+      const groups = parseGroups(msg.q);
+      const { ids, matchMode, usedMode, wikiOnly, wikiCount, relatedOnly } =
+        await rank(msg, groups, allow);
 
-    // the eval harness wants the whole ranking, not a page of cards
-    if (msg.idsOnly) {
-      self.postMessage({
-        type: "results", seq: msg.seq, total: ids.length, mode: usedMode,
-        matchMode: matchMode, wikiOnly: wikiOnly.size,
-        ms: Math.round(performance.now() - t0), ids: ids,
-      });
-      return;
-    }
-
-    const page = Math.max(1, msg.page || 1);
-    const size = msg.pageSize || 20;
-    const slice = ids.slice((page - 1) * size, page * size);
-    const words = [];
-    for (const g of groups) for (const u of g) for (const sp of u) for (const w of sp.w) words.push(w);
-    const results = slice.map((i) => {
-      const c = CARDS[i];
-      const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
-      if (wikiOnly.has(i)) {
-        const h = wikiCount.get(i);
-        r.wiki_only = true;
-        r.wiki_hits = h ? h.n : 0;
-        if (h && h.parts.length > 1) r.wiki_parts = h.parts;
+      if (msg.idsOnly) {
+        self.postMessage({
+          type: "results", seq: msg.seq, total: ids.length, mode: usedMode,
+          matchMode: matchMode, wikiOnly: wikiOnly.size,
+          ms: Math.round(performance.now() - t0), ids: ids,
+        });
+        return;
       }
-      if (relatedOnly.has(i)) r.related = true;
-      return r;
-    });
-    self.postMessage({
-      type: "results",
-      seq: msg.seq,
-      total: ids.length,
-      page: page,
-      mode: usedMode,
-      matchMode: matchMode,
-      ms: Math.round(performance.now() - t0),
-      results: results,
-      facets: facetCounts(ids, await ownFilterPools(msg, groups)),
-    });
+
+      const size = msg.pageSize || 20;
+      const page = Math.min(Math.max(1, msg.page || 1), Math.max(1, Math.ceil(ids.length / size)));
+      const slice = ids.slice((page - 1) * size, page * size);
+      const words = [];
+      for (const g of groups) for (const u of g) for (const sp of u) for (const w of sp.w) words.push(w);
+      const results = slice.map((i) => {
+        const c = CARDS[i];
+        const r = Object.assign({}, c, { snippet: snippet(c.summary, words) });
+        if (wikiOnly.has(i)) {
+          const h = wikiCount.get(i);
+          r.wiki_only = true;
+          r.wiki_hits = h ? h.n : 0;
+          if (h && h.parts.length > 1) r.wiki_parts = h.parts;
+        }
+        if (relatedOnly.has(i)) r.related = true;
+        return r;
+      });
+      self.postMessage({
+        type: "results",
+        seq: msg.seq,
+        total: ids.length,
+        page: page,
+        mode: usedMode,
+        matchMode: matchMode,
+        ms: Math.round(performance.now() - t0),
+        results: results,
+        facets: facetCounts(ids, await ownFilterPools(msg, groups)),
+      });
+    } catch (e) {
+      self.postMessage({ type: "results", seq: msg.seq, error: String(e), total: 0, page: 1,
+                         mode: "lexical", results: [], facets: {} });
+    }
   }
+
 };

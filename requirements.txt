@@ -1,7 +1,3 @@
-# Building the search bundles needs nothing but the Python standard library.
-#     python pipeline/build.py
-#
-# Only the optional concept-search model needs these two:
-#     python pipeline/lsa.py
 numpy==2.4.6
 scipy==1.17.1
+playwright==1.60.0

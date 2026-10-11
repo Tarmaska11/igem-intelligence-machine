@@ -1,13 +1,3 @@
-"""Checks that the harness measures what a browser actually does.
-
-eval/rank.js runs the worker under node with a stand-in fetch. If that ever drifts
-from the real thing, every number the harness produces is fiction. So: run the same
-queries in a real browser, in a real Worker, and require the rankings to be equal.
-
-Needs the site served locally:  python run.py 8899
-Run: python eval/crosscheck.py
-"""
-
 import json
 import os
 import subprocess
@@ -87,7 +77,6 @@ def main():
     failed = 0
     for (q, mode), s, bro in zip(QUERIES, shim, browser):
         same = s["ids"] == bro["ids"]
-        # the idsOnly shortcut must not have changed what the page itself shows
         page_ok = bro["page1"] == [cards[i]["id"] for i in bro["ids"][:20]]
         if same and page_ok:
             print("  ok   %-45s %s  n=%d" % (q[:45], mode, s["total"]))

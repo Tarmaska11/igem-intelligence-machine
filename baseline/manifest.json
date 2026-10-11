@@ -1,7 +1,7 @@
 {
   "schema": 2,
-  "version": "2026-09-13T04:13:35Z",
-  "generated_at": "2026-09-13T04:13:35Z",
+  "version": "2026-10-11T17:09:44Z",
+  "generated_at": "2026-10-11T17:09:44Z",
   "records": 4978,
   "files": {
     "cards": {
@@ -24,15 +24,10 @@
       "sha": "47fbb0d3ed2dcca2",
       "bytes": 130287
     },
-    "parts": {
-      "path": "parts.json.gz",
-      "sha": "dfb7955a875b3386",
-      "bytes": 394055
-    },
     "meta": {
       "path": "meta.json.gz",
-      "sha": "a6cb0134030bdff3",
-      "bytes": 338
+      "sha": "852db75b36abb51e",
+      "bytes": 324
     }
   }
 }

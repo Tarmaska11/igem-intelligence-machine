@@ -1,20 +1,4 @@
 "use strict";
-/* Scores the order of the wiki-only block - the part below the starred results.
-
-   Nothing else measures it: the other sets are answered by the summary arm, so the
-   wiki block only ever decides what comes after the target.
-
-   The label is the summary. For a query, the teams whose summary has every word are
-   the ones the project is really about, so a good wiki ordering puts them high.
-   The wiki arm is run with nothing excluded, so those teams are in the list it
-   ranks. It is a proxy - the summaries were written from the wikis - so it favours
-   whatever the wiki says most often, and the numbers should be read with that.
-
-   Also records how often the "Matched: N times" line goes up while you scroll
-   down the real block, and how long the wiki arm takes.
-
-   Run: node eval/wikiorder.js [path/to/search.worker.js] [label]
-*/
 
 const fs = require("fs");
 const path = require("path");
@@ -52,7 +36,6 @@ function makeWorker() {
   };
 }
 
-/* The same queries every run: summary terms with a real wiki-only tail behind them. */
 function mine(index) {
   const terms = index.terms;
   const ids = (t) => { let p = 0; return terms[t][0].map((d) => (p += d)); };
@@ -65,7 +48,6 @@ function mine(index) {
     return out;
   };
   const one = pick(single, 150);
-  // two-word queries: two mid-frequency words that share at least three summaries
   const mid = Object.keys(terms)
     .filter((t) => /^[a-z]{5,}$/.test(t) && terms[t][0].length >= 8 && terms[t][0].length <= 150)
     .sort();
@@ -123,12 +105,10 @@ async function main() {
     w.ctx.__Q = query;
     const summary = w.run("runGroups(parseGroups(__Q), null).scored.map((s) => s[0])");
     const R = new Set(summary);
-    // whole ranking, nothing held back: how well does it find the on-topic teams
     const t0 = performance.now();
     const all = await w.run("wikiTailGroups(parseGroups(__Q), null, new Set())");
     const ms = performance.now() - t0;
     const ranked = Array.isArray(all) ? all : all.ids;
-    // the block people actually scroll: summary hits taken out
     w.ctx.__P = R;
     const tail = await w.run("wikiTailGroups(parseGroups(__Q), null, __P)");
     let ups = 0, pairs = 0;
@@ -140,7 +120,6 @@ async function main() {
       for (let i = 1; i < n.length; i++) { pairs++; if (n[i] > n[i - 1]) ups++; }
     }
     const inWiki = ranked.filter((id) => R.has(id)).length;
-    // what a shuffled list would score, for scale
     const rnd = R.size && ranked.length ? inWiki / ranked.length : 0;
     rows.push({
       q: query, rel: R.size, found: inWiki, listed: ranked.length,

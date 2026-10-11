@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Build the data bundles the website loads.
-
-Reads the per-team JSON summaries, the official iGEM team CSVs and the scraped wiki
-text, and writes gzipped JSON into baseline/ (shipped with the site) and dist-data/
-(pushed to the database repo).
-
-    python pipeline/build.py            # bundles only
-    python pipeline/build.py --fulltext # also the sharded wiki index + wiki text
-"""
 import argparse
 import collections
 import glob
@@ -35,17 +25,13 @@ DIST = os.path.join(SITE, "dist-data")
 
 TOKEN = re.compile(r"[a-z0-9]{2,32}")
 COMPOUND = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)+")
-# Bumped whenever the shape of the bundles changes. A site built for one
-# schema refuses bundles from another, so a bad publish cannot break it.
 DATA_SCHEMA = 2
 
 NSHARD = 256
 MIN_DF = 2
 
-# A few summaries carry a year the competition never ran. Keep the real range.
 MIN_YEAR, MAX_YEAR = 2004, 2025
 
-# How much each part of a record counts towards the score.
 W_NAME, W_CORE, W_SUPPORT, W_BODY = 12, 7, 3, 2
 
 FACET_FIELDS = [("chassis", "chassis_organisms"), ("technique", "molecular_techniques"),
@@ -57,7 +43,6 @@ ABBREV = re.compile(r"\b([a-z])\.\s*([a-z]{3,})\b")
 
 
 def shard_of(term):
-    """Which shard a term lives in. Must match shardOf() in search.worker.js."""
     h = 5381
     for ch in term:
         h = (h * 33 + ord(ch)) & 0xFFFFFFFF
@@ -65,11 +50,6 @@ def shard_of(term):
 
 
 def tokens(text):
-    """Split text into search terms. Keep identical to tokenize() in search.worker.js.
-
-    "E. coli" also yields "ecoli", and "CRISPR-Cas9" yields crispr, cas9 and
-    crisprcas9, so searching either half or the whole thing works.
-    """
     t = (text or "").lower()
     out = TOKEN.findall(t)
     out.extend(a + b for a, b in ABBREV.findall(t))
@@ -80,12 +60,10 @@ def tokens(text):
 SCHEMA_FIELD = {"chassis": "chassis_organisms", "technique": "molecular_techniques",
                 "part": "biological_parts", "molecule": "target_molecules"}
 
-# The Registry uses two code shapes: BBa_K1234567 and the 2024+ BBa_25Y42N8F.
 _BBA_RE = re.compile(r"BBa[_\s]?([A-Za-z0-9]{4,12})", re.I)
 
 
 def part_registry(name):
-    """Registry id and URL for a part name, or (None, None) for a descriptive name."""
     m = _BBA_RE.search(name or "")
     if not m:
         return None, None
@@ -94,7 +72,6 @@ def part_registry(name):
 
 
 def items_of(value):
-    """Facet fields are a list of strings or a list of {name, importance, role}."""
     raw = value if isinstance(value, list) else ([value] if isinstance(value, str) else [])
     out = []
     for it in raw:
@@ -110,11 +87,6 @@ def items_of(value):
 
 
 def model_of(d, path):
-    """Which model produced this summary. Used for the AI disclosure in the README.
-
-    The local pass records it in _generation; the earlier worker passes only encode
-    it in the file name (metadata_gemini.json and so on).
-    """
     gen = d.get("_generation") or {}
     name = gen.get("model") or d.get("Processed by") or ""
     if not name:
@@ -122,26 +94,16 @@ def model_of(d, path):
         if base.startswith("metadata_") and base.endswith(".json"):
             name = base[len("metadata_"):-len(".json")]
     slug = re.sub(r"\s+", "-", str(name).strip().lower()) or "unknown"
-    # chibimaid-e4b was just our local name for the Gemma 3n E4B file
     return MODEL_NAMES.get(slug, slug)
 
 
 MODEL_NAMES = {"chibimaid-e4b": "Gemma 3n E4B"}
 
 
-# 2022 is when iGEM moved wikis to <year>.igem.wiki; everything older is still on
-# <year>.igem.org/Team:<Name>.
 WIKI_MOVE_YEAR = 2022
 
 
 def wiki_url(team, year, row):
-    """Where this team's wiki actually lives.
-
-    Derived, never taken from the summary. The model wrote a <year>.igem.wiki link
-    for every team, but that host only exists from 2022 - so every pre-2022 record
-    carried a dead link. The official team list gives the exact name the URL uses
-    (Lambert_GA in 2019, Lambert-GA in 2024).
-    """
     name = ((row.get("name") if row else "") or team or "").strip()
     if not name:
         return ""
@@ -152,13 +114,6 @@ def wiki_url(team, year, row):
 
 
 def identity_from_path(path):
-    """Team and year come from the folder, never from the file.
-
-    The summaries were written by a model reading the wiki, and it sometimes put
-    the project name or the wrong year in those fields - "Cyanolux SpiderColi"
-    for UC_Chile, year 2023 for Valencia_UPV/2017. Every summary lives at
-    <Team>/<Year>/metadata_<model>.json, so the path is the reliable answer.
-    """
     year_dir = os.path.basename(os.path.dirname(path))
     team_dir = os.path.basename(os.path.dirname(os.path.dirname(path)))
     try:
@@ -247,7 +202,6 @@ def build_records(seen, td, qa):
                 if v:
                     facets[kind] = [canon.label_meta(kind, v)]
             rec["city"] = row.get("city") or ""
-        # only iGEM's official villages; older tracks are folded into the one they became
         if facets.get("track"):
             vil = canon.village(facets["track"][0], (facets.get("domain") or [""])[0])
             facets["track"] = [vil] if vil else []
@@ -259,6 +213,46 @@ def build_records(seen, td, qa):
             rec["qa"] = q
         out.append(rec)
     return out, dropped
+
+
+MATCH_RANK = {"exact": 0, "relaxed": 1, "fuzzy": 2, "prefix": 3}
+
+
+def page_name(url):
+    last = (url or "").rstrip("/").rsplit("/", 1)[-1].split(":", 1)[-1]
+    return re.sub(r"[^a-z0-9]+", "", last.lower())
+
+
+def dedupe(records):
+    groups = collections.defaultdict(list)
+    for r in records:
+        if re.match(r"example([\W_]|$)", r["t"].lower()):
+            continue
+        groups[r["u"] or r["id"]].append(r)
+    keep, merged = set(), {}
+    for rs in groups.values():
+        target = page_name(rs[0]["u"])
+        best = min(rs, key=lambda r: (MATCH_RANK.get(r.get("mt"), 4),
+                                      re.sub(r"[^a-z0-9]+", "", r["t"].lower()) != target,
+                                      len(r["t"]), r["id"]))
+        keep.add(best["id"])
+        others = sorted(r["id"] for r in rs if r is not best)
+        if others:
+            merged[best["id"]] = others
+    return [r for r in records if r["id"] in keep], merged
+
+
+def load_inputs(db=None):
+    if db:
+        records = db_records(db)
+    else:
+        td = TeamDirectory(os.path.join(SRC, CONF["teams_csv"]))
+        records, dropped = build_records(load_records(), td, load_qa())
+        print("records   : %d read  (dropped %s)" % (len(records), dict(dropped)))
+    before = len(records)
+    records, merged = dedupe(records)
+    print("records   : %d  (%d duplicates and templates removed)" % (len(records), before - len(records)))
+    return records, merged
 
 
 def load_qa():
@@ -290,7 +284,6 @@ def all_names(r):
 
 
 def build_index(records):
-    """One inverted index over the summaries, with the field weights folded into tf."""
     postings = collections.defaultdict(list)
     lengths = []
     for i, r in enumerate(records):
@@ -324,8 +317,6 @@ def build_index(records):
 
 
 def facet_key(kind, value):
-    """Stable id for a facet value. Links use this, not the label, so renaming a
-    label later does not break every URL people have shared."""
     k = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return k or "x"
 
@@ -363,7 +354,6 @@ def sha(path):
 
 
 def card(r):
-    """What one result card draws. Full detail comes from records.json.gz."""
     return {
         "id": r["id"], "team_name": r["t"], "year": r["y"],
         "domain": r.get("application_domain") or r.get("track") or "",
@@ -379,7 +369,6 @@ def card(r):
 
 
 def build_parts(records):
-    """Every biological part used anywhere, deduped, with a Registry link."""
     agg = {}
     for r in records:
         for it in (r.get("biological_parts") or []):
@@ -401,23 +390,19 @@ def build_parts(records):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fulltext", action="store_true")
+    ap.add_argument("--from-db", dest="db", metavar="PATH",
+                    help="rebuild from a copy of the database repo instead of the raw sources")
     ap.add_argument("--index-only", dest="index_only", action="store_true",
                     help="rebuild the wiki index but leave the saved text alone")
     args = ap.parse_args()
     t0 = time.time()
 
-    td = TeamDirectory(os.path.join(SRC, CONF["teams_csv"]))
-    qa = load_qa()
-    seen = load_records()
-    records, dropped = build_records(seen, td, qa)
-    print("records   : %d  (dropped %s)" % (len(records), dict(dropped)))
+    records, merged = load_inputs(args.db)
     matched = sum(1 for r in records if r.get("mt"))
     print("metadata  : %d joined (%.1f%%)" % (matched, 100.0 * matched / len(records)))
 
-    # rewriting the bundles would stamp a new version and make every eval set look
-    # stale, so an index-only run leaves them exactly as they are
     if args.index_only:
-        build_fulltext(records, index_only=True)
+        build_fulltext(records, index_only=True, db=args.db, merged=merged)
         print("\ndone in %.0fs" % (time.time() - t0))
         return
 
@@ -441,15 +426,18 @@ def main():
         },
     }
 
+    parts = build_parts(records)
     for target in (BASELINE, DIST):
         os.makedirs(target, exist_ok=True)
         sizes = {}
-        for name, obj in (("cards", [card(r) for r in records]),
-                          ("records", records),
-                          ("index", index),
-                          ("facets", facets),
-                          ("parts", build_parts(records)),
-                          ("meta", meta)):
+        bundles = [("cards", [card(r) for r in records]),
+                   ("records", records),
+                   ("index", index),
+                   ("facets", facets),
+                   ("meta", meta)]
+        if target == DIST:
+            bundles.insert(4, ("parts", parts))
+        for name, obj in bundles:
             p = os.path.join(target, name + ".json.gz")
             raw, gz = write_gz(p, obj)
             sizes[name] = (raw, gz)
@@ -459,11 +447,9 @@ def main():
             print("   %-9s raw %7.1f MB   gz %6.2f MB" % (name, raw / 1e6, gz / 1e6))
         print("   %-9s %20s gz %6.2f MB" % ("TOTAL", "", total / 1e6))
 
-        # records is part of the contract: the wiki shards and the concept model are
-        # addressed by record position, so a consumer must refuse a mismatch
         man = {"schema": DATA_SCHEMA, "version": meta["built_at"],
                "generated_at": meta["built_at"], "records": len(records), "files": {}}
-        for name in ("cards", "records", "index", "facets", "parts", "meta"):
+        for name, _ in bundles:
             rel = name + ".json.gz"
             man["files"][name] = {"path": rel, "sha": sha(os.path.join(target, rel)),
                                   "bytes": os.path.getsize(os.path.join(target, rel))}
@@ -471,19 +457,58 @@ def main():
             json.dump(man, fh, indent=2)
 
     if args.fulltext or args.index_only:
-        build_fulltext(records, index_only=args.index_only)
+        build_fulltext(records, index_only=args.index_only, db=args.db, merged=merged)
     print("\ndone in %.0fs" % (time.time() - t0))
 
 
 _WIKI_INDEX = None
 
 
-def wiki_paths():
-    """One scan of IGEM_CORPUS, mapping <team-slug>-<year> to its text file."""
+def db_records(db):
+    with gzip.open(os.path.join(db, "records.json.gz")) as fh:
+        return json.load(fh)
+
+
+def read_text(path):
+    if path.endswith(".gz"):
+        with gzip.open(path, "rb") as fh:
+            return fh.read().decode("utf-8", errors="ignore")
+    with open(path, encoding="utf-8", errors="ignore") as fh:
+        return fh.read()
+
+
+def record_text(rid, paths, merged=None):
+    main = read_text(paths[rid]) if rid in paths else ""
+    extra = [read_text(paths[o]) for o in (merged or {}).get(rid, []) if o in paths]
+    if not extra:
+        return main
+    seen = {line.strip() for line in main.split("\n") if line.strip()}
+    out = [main] if main.strip() else []
+    for text in extra:
+        keep = []
+        for line in text.split("\n"):
+            key = line.strip()
+            if key and key in seen:
+                continue
+            seen.add(key)
+            keep.append(line)
+        part = "\n".join(keep).strip("\n")
+        if part.strip():
+            out.append(part)
+    return "\n\n".join(out)
+
+
+def wiki_paths(db=None):
     global _WIKI_INDEX
     if _WIKI_INDEX is not None:
         return _WIKI_INDEX
     _WIKI_INDEX = {}
+    if db:
+        root = os.path.join(db, "fulltext", "text")
+        for fn in os.listdir(root):
+            if fn.endswith(".txt.gz"):
+                _WIKI_INDEX[fn[:-len(".txt.gz")]] = os.path.join(root, fn)
+        return _WIKI_INDEX
     root = os.path.join(SRC, "IGEM_CORPUS")
     for team in os.listdir(root):
         tdir = os.path.join(root, team)
@@ -500,28 +525,22 @@ def wiki_paths():
     return _WIKI_INDEX
 
 
-def build_fulltext(records, index_only=False):
-    """Sharded inverted index over the raw wiki text, plus the text itself.
-
-    Postings are spooled to one temporary file per shard and merged at the end.
-    Holding all ~14 million of them in memory needed well over a gigabyte, which
-    is more than this machine can spare.
-    """
+def build_fulltext(records, index_only=False, db=None, merged=None):
     out = os.path.join(DIST, "fulltext")
     tmp = os.path.join(out, "_tmp")
     os.makedirs(os.path.join(out, "text"), exist_ok=True)
     os.makedirs(tmp, exist_ok=True)
     print("\n[fulltext] scanning wiki text ...", flush=True)
 
-    index = wiki_paths()
+    index = wiki_paths(db)
     df = collections.Counter()
     paths = {}
+    merged = merged or {}
     for i, r in enumerate(records):
-        p = index.get(r["id"])
-        if not p:
+        if r["id"] not in index and not any(o in index for o in merged.get(r["id"], [])):
             continue
-        paths[i] = p
-        df.update(set(tokens(open(p, encoding="utf-8", errors="ignore").read())))
+        paths[i] = r["id"]
+        df.update(set(tokens(record_text(r["id"], index, merged))))
         if i % 500 == 0:
             print("   pass1 %d/%d" % (i, len(records)), flush=True)
     keep = {t for t, c in df.items() if c >= MIN_DF}
@@ -530,8 +549,8 @@ def build_fulltext(records, index_only=False):
 
     spool = [open(os.path.join(tmp, "%03d.txt" % s), "w", encoding="utf-8") for s in range(NSHARD)]
     lengths = [0] * len(records)
-    for n, (i, p) in enumerate(sorted(paths.items())):
-        text = open(p, encoding="utf-8", errors="ignore").read()
+    for n, (i, rid) in enumerate(sorted(paths.items())):
+        text = record_text(rid, index, merged)
         tf = collections.Counter(tokens(text))
         lengths[i] = sum(tf.values())
         for t, c in tf.items():
@@ -571,7 +590,6 @@ def build_fulltext(records, index_only=False):
         if s % 64 == 0:
             print("   merged shard %d/%d" % (s, NSHARD), flush=True)
     os.rmdir(tmp)
-    # the shards are keyed by term, so document lengths need a file of their own
     nz = [x for x in lengths if x]
     meta = {"n": len(lengths), "docs": len(nz),
             "avgdl": round(sum(nz) / float(len(nz) or 1), 2), "dl": lengths}

@@ -1,14 +1,3 @@
-"""The builder and the search worker have to split text the same way.
-
-pipeline/build.py writes the index and assets/search.worker.js reads it, so the two
-tokenizers are copies of each other. If they ever drift, a word typed in the search
-box stops matching the postings that were written for it - and nothing errors, the
-results just quietly go missing. Same for shard_of, which decides which wiki shard a
-term was written into.
-
-Run: python tests/test_parity.py
-"""
-
 import json
 import os
 import subprocess
@@ -41,9 +30,7 @@ SAMPLES = [
 JS = r"""
 const fs = require("fs");
 const src = fs.readFileSync(process.argv[2], "utf8");
-// pull the two functions out of the worker without running its message loop
 const api = {};
-// the worker registers a handler on self at the end, so give it somewhere to land
 new Function("api", "self",
              src + "\napi.tokenize = tokenize; api.shardOf = shardOf;")(api, {});
 const samples = JSON.parse(process.argv[3]);

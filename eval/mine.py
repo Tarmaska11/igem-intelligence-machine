@@ -1,12 +1,3 @@
-"""Builds the four eval sets out of the bundles.
-
-Same four sets the old sqlite harness used, re-derived against the shipped data.
-Labels are record POSITIONS, because that is what the ranker returns; the ids are
-kept beside them so a stale set is obvious instead of silently wrong.
-
-Run: python eval/mine.py
-"""
-
 import json
 import os
 import re
@@ -20,7 +11,6 @@ LSA_TOKEN = re.compile(r"[a-zA-Z][a-zA-Z0-9-]+")
 
 
 def lsa_tokens(text):
-    """Same rule as pipeline/lsa.py, so the idf we borrow lines up with the vocab."""
     out = []
     for raw in LSA_TOKEN.findall((text or "").lower()):
         t = raw.strip("-")
@@ -33,8 +23,6 @@ def lsa_tokens(text):
 
 
 def distinctive_keywords(vidx, idf, text, n=8):
-    """The n rarest in-vocabulary words of a record - a stand-in for what someone
-    would type if they half-remembered the project."""
     seen, scored = set(), []
     for tok in lsa_tokens(text):
         if tok in seen:
@@ -48,11 +36,6 @@ def distinctive_keywords(vidx, idf, text, n=8):
 
 
 def flip_number(w):
-    """Singular to plural and back, the naive way a person would type it.
-
-    Deliberately ignorant of the search's own folding rule, so this measures whether
-    the two forms find each other rather than whether the rule agrees with itself.
-    """
     if len(w) < 4:
         return w
     if w.endswith("ies"):
@@ -69,7 +52,6 @@ def flip_number(w):
 
 
 def team_of(rid):
-    """Record ids are '<team-slug>-<year>'."""
     return re.sub(r"-(\d{4}|na)$", "", rid)
 
 
@@ -112,10 +94,6 @@ def build(name="baseline"):
                                 "anchor": anchor, "anchor_id": ids[anchor]})
     sets["team-lineage"] = lineage
 
-    # Nobody types a project's own wording back at it. This set flips every keyword
-    # to the other number - the doc says "spider", the query says "spiders" - which
-    # is the one thing the other four sets can never show, because their queries are
-    # lifted verbatim out of the record they are looking for.
     morph = []
     for i in range(len(records)):
         words = kw[i].split()
@@ -131,10 +109,6 @@ def build(name="baseline"):
             morph.append({"query": " ".join(flipped), "rel": [i], "rel_ids": [ids[i]]})
     sets["morph"] = morph
 
-    # Teams write "reactive oxygen species (ROS)" once and "ROS" after. Someone who
-    # only knows the short form should still find the projects that spell it out.
-    # Query is the abbreviation, relevant is every record using the long phrase but
-    # never the abbreviation on its own - so the answer cannot be found literally.
     import mine_abbrev
     sets["abbrev"] = mine_abbrev.build(records, ids)
 

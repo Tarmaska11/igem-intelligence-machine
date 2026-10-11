@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Turn the LLM-extracted facet values into a filter list a person can actually use.
-
-The summaries spell the same thing many ways ("Gel electrophoresis", "gel
-electrophoresis", "Agarose gel electrophoresis"), so the raw values make a filter
-sidebar that looks random. All of this runs at build time.
-"""
 import re
 
 GREEK = {
@@ -23,15 +16,12 @@ def norm(s):
     return re.sub(r"\s+", " ", s).strip(" .-")
 
 
-# Values that carry no information. Dropped entirely.
 JUNK = re.compile(
     r"^(n/?a|none|not specified|not mentioned|unknown|unspecified|other|various|"
     r"multiple|several|general|tbd|-+|misc\w*|none explicitly mentioned|water|"
     r"no\b.*(mention|specif)\w*|.*not (applicable|available).*)$"
 )
 
-# Each rule is (label, regex over the normalised value). First match wins, so the
-# specific ones go above the general ones.
 
 DOMAIN = [
     ("Biosensors",               r"biosens|biensing|sensing"),
@@ -211,8 +201,6 @@ PART = [
     ("Registry / BioBrick part", r"^bba[ _-]?[a-z]?\d+|^biobricks?$"),
 ]
 
-# The team CSVs give regions as slugs and countries as ISO-3 codes. These are the
-# 67 countries that actually appear, spelled the way a reader expects.
 REGION_LABEL = {
     "asia": "Asia", "north-america": "North America", "europe": "Europe",
     "latin-america": "Latin America", "oceania": "Oceania", "africa": "Africa",
@@ -240,7 +228,6 @@ COUNTRY_LABEL = {
 
 
 def label_meta(kind, value):
-    """Display label for a value that came straight from the iGEM team CSVs."""
     v = (value or "").strip()
     if kind == "region":
         return REGION_LABEL.get(v.lower(), v.replace("-", " ").title())
@@ -264,7 +251,6 @@ def _title(s):
     return out[:1].upper() + out[1:]
 
 
-# Answers that are true of every project, so they filter nothing.
 GENERIC = {
     "chassis": {"synthetic biology"},
     "technique": {"experimental validation", "experimental design", "expression", "incubation"},
@@ -274,7 +260,6 @@ GENERIC = {
 
 
 def canon(kind, raw):
-    """Canonical filter label for one raw facet value, or None to drop it."""
     n = norm(raw)
     if not n or len(n) > 90 or JUNK.match(n) or n in GENERIC.get(kind, ()):
         return None
@@ -284,10 +269,6 @@ def canon(kind, raw):
     return _title(n)
 
 
-# iGEM's own 15 villages (villages.igem.org). The team lists use the same
-# column for the tracks teams chose before villages existed, so those are
-# folded into the village they became; the vague ones go by the project's
-# own application domain, and get no village if that says nothing either.
 VILLAGES = {
     "Agriculture", "Art & Design", "Biomanufacturing", "Bioremediation",
     "Climate Crisis", "Conservation", "Diagnostics", "Fashion & Cosmetics",
@@ -319,7 +300,6 @@ DOMAIN_VILLAGE = {
 
 
 def village(raw, domain):
-    """The official village for a team's track or village, or "" if none fits."""
     v = (raw or "").strip()
     if v in VILLAGES:
         return v
@@ -328,13 +308,10 @@ def village(raw, domain):
     return DOMAIN_VILLAGE.get(domain or "", "")
 
 
-# The model spells things a thousand ways, so most raw values belong to one team.
-# A filter keeps its named groups, plus any other value at least this many teams share.
 TAIL_KINDS = {"molecule", "technique", "part", "chassis"}
 MIN_TEAMS = 10
 RULE_LABELS = {k: {label for label, _ in v} for k, v in RULES.items()}
 
 
 def keep_value(kind, label, n):
-    """Whether a filter value is worth listing, given how many teams have it."""
     return kind not in TAIL_KINDS or label in RULE_LABELS.get(kind, ()) or n >= MIN_TEAMS

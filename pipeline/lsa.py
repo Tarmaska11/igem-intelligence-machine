@@ -1,21 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Build the concept-search model and write it in a form the browser can read.
-
-Same idea as the local version: TF-IDF over the corpus, reduced to 200 latent
-dimensions, then quantised to int8 so it can ship with the site.
-
-Written to stay small in memory, because this corpus is 600 MB of text and the
-machine that builds it is not a server:
-
-  pass 1  stream every document, keep only document frequencies
-  pass 2  stream them again, writing straight into sparse arrays
-  then    a truncated SVD, so the 4978 x 4978 Gram matrix is never formed
-
-Nothing per-document is retained between passes. BLAS is held to two threads and
-the loops rest briefly so the CPU is not pinned for the whole run.
-
-    python pipeline/lsa.py
-"""
+import argparse
 import array
 import base64
 import gzip
@@ -26,7 +9,6 @@ import re
 import sys
 import time
 
-# keep BLAS off every core - must happen before numpy is imported
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
            "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
     os.environ.setdefault(_v, "2")
@@ -91,14 +73,11 @@ def doc_text(rec, wiki):
     return " ".join(x for x in bits if x) + " " + (wiki or "")[:400000]
 
 
-def read_doc(rec, paths):
-    wiki = ""
-    p = paths.get(rec["id"])
-    if p:
-        try:
-            wiki = open(p, encoding="utf-8", errors="ignore").read()
-        except Exception:
-            wiki = ""
+def read_doc(rec, paths, merged):
+    try:
+        wiki = B.record_text(rec["id"], paths, merged)
+    except Exception:
+        wiki = ""
     return tokenize(doc_text(rec, wiki))[:MAX_TOKENS_PER_DOC]
 
 
@@ -110,27 +89,28 @@ def counts_of(toks):
 
 
 def quantise(mat):
-    """int8 with one scale - plenty for ranking by cosine."""
     peak = float(np.abs(mat).max()) or 1.0
     scale = peak / 127.0
     return np.clip(np.round(mat / scale), -127, 127).astype(np.int8), scale
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--from-db", dest="db", metavar="PATH",
+                    help="rebuild from a copy of the database repo instead of the raw sources")
+    args = ap.parse_args()
     t0 = time.time()
-    td = B.TeamDirectory(os.path.join(B.SRC, B.CONF["teams_csv"]))
-    records, _ = B.build_records(B.load_records(), td, B.load_qa())
+    records, merged = B.load_inputs(args.db)
     limit = int(os.environ.get("LSA_LIMIT", "0"))
     if limit:
-        records = records[:limit]       # used to measure memory before a full run
-    paths = B.wiki_paths()
+        records = records[:limit]
+    paths = B.wiki_paths(args.db)
     n = len(records)
     print("records: %d" % n, flush=True)
 
-    # ---- pass 1: document frequencies only ----
     df = {}
     for i, r in enumerate(records):
-        for t in set(read_doc(r, paths)):
+        for t in set(read_doc(r, paths, merged)):
             df[t] = df.get(t, 0) + 1
         if (i + 1) % REST_EVERY == 0:
             time.sleep(REST_SECONDS)
@@ -150,12 +130,11 @@ def main():
     del df, cand
     print("vocab: %d (of the full term set)" % v, flush=True)
 
-    # ---- pass 2: straight into sparse triplets ----
     rows = array.array("i")
     cols = array.array("i")
     vals = array.array("f")
     for i, r in enumerate(records):
-        for t, k in counts_of(read_doc(r, paths)).items():
+        for t, k in counts_of(read_doc(r, paths, merged)).items():
             j = vidx.get(t)
             if j is not None:
                 rows.append(i)
@@ -181,8 +160,8 @@ def main():
     u, s, vt = svds(x, k=k)
     order = np.argsort(s)[::-1]
     s, u = s[order], u[:, order]
-    comp = vt[order, :].T                      # V x k, projects a query into the space
-    docs = u * s[None, :]                      # N x k
+    comp = vt[order, :].T
+    docs = u * s[None, :]
     dn = np.linalg.norm(docs, axis=1)
     dn[dn == 0.0] = 1.0
     docs = docs / dn[:, None]

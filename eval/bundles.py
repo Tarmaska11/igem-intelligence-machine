@@ -1,11 +1,3 @@
-"""Reads the built bundles and refuses to work on a set that no longer fits them.
-
-Everything in the ranker is addressed by record position, so a rebuild that adds or
-drops one record silently repoints every label in an eval set. Nothing throws when
-that happens - the numbers just quietly describe the wrong teams. So the checks here
-fail hard rather than warn.
-"""
-
 import gzip
 import json
 import os
@@ -29,8 +21,6 @@ def load(name="baseline", what=("cards", "records", "facets", "lsa")):
 
 
 def fingerprint(name="baseline"):
-    """What an eval set depends on. The manifest covers neither lsa nor the wiki
-    shards, so those are pinned separately."""
     d = data_dir(name)
     man = json.load(open(os.path.join(d, "manifest.json"), encoding="utf-8"))
     lsa = read_gz(os.path.join(d, "lsa.json.gz"))
@@ -43,7 +33,6 @@ def fingerprint(name="baseline"):
 
 
 def preflight(name="baseline", want_fulltext=False):
-    """Positions must line up across every bundle before anything is scored."""
     d = data_dir(name)
     cards = read_gz(os.path.join(d, "cards.json.gz"))
     index = read_gz(os.path.join(d, "index.json.gz"))

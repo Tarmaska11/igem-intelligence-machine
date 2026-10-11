@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Serve the site locally and open it in a browser.
-
-    python run.py            # http://127.0.0.1:8899/
-    python run.py 9000       # pick another port
-
-Nothing is built or downloaded: the whole 2008-2025 archive is already in
-baseline/, so this works with no network at all. Standard library only.
-"""
 import http.server
 import os
 import socketserver
@@ -23,12 +14,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*a, directory=HERE, **kw)
 
     def end_headers(self):
-        # the bundles are content-hashed in the manifest, so never cache them here
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def log_message(self, fmt, *args):
-        pass   # a quiet console is nicer than a wall of GETs
+        pass
 
 
 def main():
@@ -36,8 +26,9 @@ def main():
         print("baseline/ is missing - run: python pipeline/build.py")
         return 1
     url = "http://127.0.0.1:%d/" % PORT
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    socketserver.ThreadingTCPServer.allow_reuse_address = os.name != "nt"
+    socketserver.ThreadingTCPServer.daemon_threads = True
+    with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
         print("iGEM Intelligence Machine -> %s   (ctrl-c to stop)" % url)
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         try:

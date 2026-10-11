@@ -1,13 +1,3 @@
-"""Scores the shipped search worker on the four eval sets.
-
-Starts eval/rank.js, feeds it queries, scores what comes back, and writes one run
-record per run so cycles can be compared later. The worker file is hashed into the
-run, because a number only means something next to the code that produced it.
-
-Run: python eval/harness.py --label c6-baseline
-     python eval/harness.py --label c6-stem --arms lexical,hybrid
-"""
-
 import argparse
 import hashlib
 import json
@@ -24,9 +14,6 @@ SITE = os.path.dirname(HERE)
 SETS = os.path.join(HERE, "sets")
 RUNS = os.path.join(HERE, "results", "runs")
 
-# known-item and para-nl are answered by construction - the query is the record's
-# own rarest words - so they are regression guards, not measuring instruments.
-# Sampling them down keeps a cycle affordable on this machine.
 SAMPLE = {"known-item": 200, "para-nl": 200, "morph": 400,
           "team-lineage": 800, "facet-cohere": 0}
 
@@ -57,7 +44,6 @@ def load_set(name, fp, sample):
 
 
 class Ranker:
-    """One node process holding the loaded bundles for the whole run."""
 
     def __init__(self, data="baseline"):
         self.p = subprocess.Popen(
@@ -101,7 +87,6 @@ def run_arm(r, arm, queries, k, rest_every, rest_seconds):
         rankings.append(got["ids"])
         ms.append(got["ms"])
         wiki_only.append(got.get("wikiOnly") or 0)
-        # this laptop has shut down under sustained load, so let it breathe
         if rest_every and i % rest_every == 0:
             time.sleep(rest_seconds)
     out = metrics.score(rankings, queries, k)

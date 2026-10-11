@@ -1,12 +1,4 @@
 "use strict";
-/* Runs the real search worker under node so the harness can score what actually ships.
-
-   The worker is written for a browser, so it needs a `self` and a `fetch` that can
-   reach the wiki shards on disk. Everything else node 20 already has.
-
-   Reads one JSON request per line on stdin, writes one JSON reply per line.
-   Run: node eval/rank.js [baseline|dist-data]
-*/
 
 const fs = require("fs");
 const path = require("path");
@@ -26,8 +18,6 @@ function makeWorker() {
   const ctx = {
     console, setTimeout, clearTimeout, AbortController,
     Response, DecompressionStream, atob, performance,
-    // the worker asks for <base>fulltext/index/NNN.json.gz; hand back the gzip
-    // bytes untouched, the same as a static server would
     fetch: async (url) => {
       const p = path.join(FT, String(url).replace(/^.*?fulltext\//, ""));
       if (!fs.existsSync(p)) return new Response(null, { status: 404 });
@@ -63,7 +53,6 @@ async function main() {
     if (!line.trim()) continue;
     const req = JSON.parse(line);
     if (req.type === "bye") break;
-    // turning the wiki arm off drops the shard cache, so arms stay independent
     if (req.type === "wiki") {
       w.tell({ type: "fulltext", bases: req.on ? ["./"] : null });
       say({ ok: true });

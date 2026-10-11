@@ -1,11 +1,3 @@
-"""Compares two runs, per set and arm, with paired counts.
-
-A mean delta on its own does not say whether a change helped broadly or just moved
-three queries, so the better/worse/same counts come from the per-query detail.
-
-Run: python eval/report.py baseline c6-orfallback
-"""
-
 import glob
 import json
 import os

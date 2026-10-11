@@ -1,17 +1,9 @@
-# -*- coding: utf-8 -*-
-"""Official iGEM team metadata (csv/teams-*.csv) and how we match it to a summary.
-
-The CSVs give us region, country, section and village (= the real competition track).
-Team names in the summaries came from wiki folder names, so they drift from the official
-spelling and we need a few fallbacks to match them.
-"""
 import csv
 import difflib
 import glob
 import os
 import re
 
-# Wiki pages that got scraped as if they were teams. They are not.
 NOT_TEAMS = {
     "", "acknowledgement", "acknowledgements", "banner", "biosafety", "safety",
     "template", "templates", "main", "home", "index", "test", "sandbox",
@@ -21,10 +13,8 @@ NOT_TEAMS = {
     "placeholder", "untitled", "demo", "wikitemplate", "xyzlink",
 }
 
-# Names that are obviously a template placeholder rather than a real team.
 JUNK_NAME = re.compile(r"[\[\]{}<>]|^(your|insert|enter)\b|^tbd$", re.I)
 
-# Words that appear in one spelling of a name but not the other.
 _NOISE = re.compile(
     r"(university|universite|universitat|universidad|college|school|institute|"
     r"technology|igem|team|the)"
@@ -36,7 +26,6 @@ def slug(s):
 
 
 def _keys(name, year):
-    """Progressively looser spellings of one team name."""
     s = slug(name)
     out = [s]
     no_year = re.sub(r"(19|20)\d{2}$", "", s)
@@ -50,8 +39,8 @@ def _keys(name, year):
 
 class TeamDirectory(object):
     def __init__(self, csv_dir):
-        self.rows = {}          # (slug, year) -> row
-        self.by_year = {}       # year -> {slug: row}
+        self.rows = {}
+        self.by_year = {}
         for path in sorted(glob.glob(os.path.join(csv_dir, "teams-*.csv"))):
             with open(path, encoding="utf-8-sig", newline="") as fh:
                 for row in csv.DictReader(fh):
@@ -66,7 +55,6 @@ class TeamDirectory(object):
                         self.by_year.setdefault(year, {}).setdefault(k, row)
 
     def lookup(self, team_name, year):
-        """Return (row, how) or (None, reason)."""
         s = slug(team_name)
         if s in NOT_TEAMS or JUNK_NAME.search(team_name or ""):
             return None, "not-a-team"
@@ -84,7 +72,6 @@ class TeamDirectory(object):
             if row:
                 return row, ("exact" if i == 0 else "relaxed")
 
-        # One official name contains ours (or the other way round) and only one does.
         hits = [r for k, r in pool.items() if len(k) >= 5 and (k.startswith(s) or s.startswith(k))]
         uniq = {id(r): r for r in hits}
         if len(uniq) == 1:

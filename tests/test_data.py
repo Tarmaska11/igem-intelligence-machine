@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""Checks on the built data. No browser needed, so CI can always run it.
-
-    python tests/test_data.py
-"""
 import gzip
 import hashlib
 import json
@@ -72,12 +67,18 @@ def main():
     unmatched = [r["t"] for r in records if not r.get("mt")]
     check("few unmatched team names left", len(unmatched) < 150, len(unmatched))
 
+    print("\nconcept model")
+    lsa = load("lsa")
+    check("model has a row per record", lsa["n"] == n, "%d vs %d" % (lsa["n"], n))
+    check("model rows are in record order", lsa.get("ids") == ids)
+
     print("\nparts")
-    parts = load("parts")
-    check("parts index built", parts["total_unique"] > 1000, parts["total_unique"])
-    check("some parts link to the Registry", parts["coded"] > 500, parts["coded"])
+    parts = [p for r in records for p in (r.get("biological_parts") or [])]
+    coded = [p for p in parts if p.get("registry_id")]
+    check("parts are listed", len(parts) > 1000, len(parts))
+    check("some parts link to the Registry", len(coded) > 500, len(coded))
     check("coded parts carry a url",
-          all(p["url"] for p in parts["parts"][:2000] if p["coded"]))
+          all((p.get("registry_url") or "").startswith("https://registry.igem.org/") for p in coded))
 
     print("\nfilters")
     for kind in ("year", "track", "domain", "chassis", "technique", "molecule", "part"):
@@ -91,11 +92,20 @@ def main():
         for r in top:
             covered.update(r["d"])
         pct = 100.0 * len(covered) / n
-        enough = pct >= 70 or kind == "molecule"   # target molecules are a genuine long tail
+        enough = pct >= 70 or kind == "molecule"
         check("%s top-20 coverage %.1f%%" % (kind, pct), enough)
         distinct = sum(1 for r in rows if r["n"] >= n * 0.01)
         check("%s has >=8 values at >=1%%" % kind,
               distinct >= 8 or kind in ("section", "failures", "region"), distinct)
+
+    print("\nasset stamps")
+    page = open(os.path.join(SITE, "index.html"), encoding="utf-8").read()
+    app = open(os.path.join(SITE, "assets", "app.js"), encoding="utf-8").read()
+    for rel, text in (("assets/style.css", page), ("assets/app.js", page),
+                      ("assets/favicon.svg", page), ("assets/search.worker.js", app)):
+        with open(os.path.join(SITE, rel), "rb") as fh:
+            ver = hashlib.sha256(fh.read()).hexdigest()[:8]
+        check("%s is stamped with its current hash" % rel, (rel + "?v=" + ver) in text, ver)
 
     print("\n%d checks, %d failed" % (checks, len(failures)))
     if failures:

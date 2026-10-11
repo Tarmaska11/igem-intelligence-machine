@@ -1,12 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Smoke test: load the site and check every feature is still there.
-
-    python -m http.server 8899 &
-    python tests/smoke.py http://127.0.0.1:8899/
-
-Needs playwright (pip install playwright && playwright install chromium).
-Exits non-zero on the first failure, so CI can run it on every push.
-"""
+import json
 import re
 import sys
 
@@ -31,9 +23,6 @@ def main():
         browser = pw.chromium.launch(headless=True)
         errors = []
         page = browser.new_page(viewport={"width": 1400, "height": 900})
-        # A team's own wiki is embedded in an iframe and runs its decade-old
-        # scripts, which throw in a modern browser. That is not our code, so stop
-        # collecting while that frame is on screen.
         watching = [True]
         page.on("pageerror", lambda e: errors.append(str(e)) if watching[0] else None)
 
@@ -45,8 +34,6 @@ def main():
         check("no results on the home page", page.locator("#results .card").count() == 0)
         check("search box is in the hero",
               page.locator("#heroSearch .searchwrap").count() == 1)
-        # the mark is an inline path, so "the element is there" proves nothing -
-        # an empty box passes that. Measure it and look for real path data.
         mark = page.evaluate("""()=>{const s=document.querySelector('.brand .logo svg');
             if(!s) return null; const r=s.getBoundingClientRect();
             const p=s.querySelector('path');
@@ -75,16 +62,22 @@ def main():
         print("and / or in the search box")
 
         def total_for(q):
-            page.goto(BASE + "?q=" + q.replace(" ", "+"), wait_until="domcontentloaded")
+            page.goto(BASE + "?q=" + q.replace(" ", "+"), wait_until="networkidle")
             page.wait_for_function("()=>document.querySelectorAll('.card').length>0",
                                    timeout=40000)
-            # the count is only this query's once the query itself shows up in it
             last = q.split()[-1]
             page.wait_for_function(
                 "w=>{const e=document.querySelector('#resultCount');"
                 "return e && e.textContent.toLowerCase().includes(w);}",
                 arg=last.lower(), timeout=30000)
-            return int(re.sub(r"[^0-9].*$", "", page.inner_text("#resultCount").strip()))
+            seen = None
+            for _ in range(20):
+                now = page.inner_text("#resultCount").strip()
+                if now == seen:
+                    break
+                seen = now
+                page.wait_for_timeout(1000)
+            return int(re.sub(r"[^0-9].*$", "", seen))
 
         spider = total_for("spider")
         coffee = total_for("coffee")
@@ -108,13 +101,12 @@ def main():
               or rel > 0)
 
         print("browse without a query")
-        # a facet on its own is a valid search - it used to throw in the worker
         page.goto(BASE + "?year=2024", wait_until="domcontentloaded")
         page.wait_for_function("()=>document.querySelectorAll('.card').length>0", timeout=40000)
         page.wait_for_timeout(1500)
         check("facet alone returns teams", page.locator(".card").count() > 0)
         check("facet alone shows a count", "team" in page.inner_text("#resultCount"))
-        years = page.locator(".card .yr").all_inner_texts()
+        years = page.locator(".card .year").all_inner_texts()
         check("newest first", years == sorted(years, reverse=True), years[:5])
 
         print("filters")
@@ -157,8 +149,6 @@ def main():
         check("clear all removes the chips", page.locator("#activeChips .chip").count() == 0)
 
         print("concept mode")
-        # pick Concept the moment it is offered: the page used to load the model a
-        # second time a moment later and drop the reader back into Keyword mode
         page.goto(BASE, wait_until="domcontentloaded")
         page.wait_for_selector("#heroStats:not(:empty)", timeout=40000)
         page.fill("#q", "spider silk")
@@ -170,6 +160,18 @@ def main():
         page.wait_for_timeout(8000)
         check("Concept stays picked", "Concept" in page.locator("#modeToggle button.on").inner_text())
         check("Concept adds related projects", int(page.inner_text("#resultCount").split()[0]) > kw)
+        page.locator("#modeToggle button").nth(0).click()
+        page.wait_for_timeout(1500)
+        box = page.locator("#modeToggle button").nth(1).bounding_box()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.evaluate("()=>run(false)")
+        page.wait_for_timeout(150)
+        page.mouse.up()
+        page.wait_for_timeout(3000)
+        check("Concept click survives a background search",
+              "Concept" in page.locator("#modeToggle button.on").inner_text()
+              and "mode=hybrid" in page.url, page.url)
 
         print("team drawer")
         page.goto(BASE + "?q=biosensor", wait_until="domcontentloaded")
@@ -194,14 +196,12 @@ def main():
         check("width is remembered",
               page.evaluate("()=>localStorage.getItem('igem_drawer_width')") is not None)
 
-        watching[0] = False        # the embedded wiki is about to load
+        watching[0] = False
         page.locator(".dtab").nth(1).click()
         page.wait_for_timeout(2500)
         check("wiki column", page.locator(".wiki-col").count() == 1)
         check("ai column", page.locator(".ai-col").count() == 1)
         modes = [x.inner_text() for x in page.locator(".wiki-mode").all()]
-        # pre-2022 wikis are embedded from the Internet Archive, so the first tab
-        # is labelled "Archived wiki" for those years
         check("wiki / saved toggle",
               len(modes) == 2 and modes[0] in ("Live wiki", "Archived wiki")
               and modes[1] == "Saved text", modes)
@@ -240,7 +240,7 @@ def main():
         print("blog")
         page.keyboard.press("Escape")
         page.wait_for_timeout(600)
-        watching[0] = True         # back to our own pages
+        watching[0] = True
         page.wait_for_timeout(300)
         page.click("#brandHome")
         page.wait_for_timeout(1500)
@@ -255,24 +255,22 @@ def main():
         else:
             print("  skip  no posts published")
 
-        print("parts registry")
-        # the button is off by default; site.json can turn it on
-        page.evaluate("()=>{document.querySelector('#partsBtn').hidden=false;}")
-        page.locator("#partsBtn").click()
-        page.wait_for_selector(".part-row", timeout=30000)
-        check("parts list renders", page.locator(".part-row").count() > 100)
-        check("parts summary", "unique parts" in page.inner_text("#partsSummary"))
-        page.fill("#partsFilter", "BBa_K")
-        page.wait_for_timeout(900)
-        check("parts filter works", "match" in page.inner_text("#partsSummary"))
-        check("registry links present", page.locator("a.part-name.coded").count() > 0)
-
         print("navigation")
         page.keyboard.press("Escape")
         page.wait_for_timeout(400)
         page.click("#brandHome")
         page.wait_for_timeout(1200)
         check("home clears the results", page.locator("#results .card").count() == 0)
+        page.fill("#q", "biosensor")
+        page.keyboard.press("Enter")
+        page.wait_for_selector("#customBtn:not([hidden])", timeout=20000)
+        page.click("#customBtn")
+        page.wait_for_timeout(1200)
+        page.fill("#q", "spider silk")
+        page.click("#searchBtn")
+        page.wait_for_timeout(2000)
+        check("a search leaves the Database page",
+              page.is_hidden("#customView") and page.is_visible("#results"))
 
         print("mobile")
         page.set_viewport_size({"width": 390, "height": 844})
@@ -285,9 +283,6 @@ def main():
         page.locator("#filterBtn").click()
         page.wait_for_timeout(700)
         check("filter panel opens", page.locator("#facets").is_visible())
-        # the filter panel slides off-canvas here, so the applied filters are
-        # repeated above the results - without that row there is no way to see
-        # or clear a filter on a phone
         page.locator(".facet-item").first.click()
         page.wait_for_timeout(1800)
         page.locator(".facets-close").click()
@@ -301,8 +296,17 @@ def main():
         page.locator("#customBtn").click()
         page.wait_for_timeout(2500)
         check("nav page opens on a phone", page.locator("#customView").is_visible())
+        body = page.frame_locator("#customFrame").locator("body")
+        try:
+            page.wait_for_function(
+                "()=>!document.querySelector('#customFrame').srcdoc.includes('Loading…</p>')",
+                timeout=20000)
+            text = body.inner_text(timeout=5000).strip()
+        except Exception as e:
+            text = "error: " + str(e)[:80]
+        check("nav page is not empty", len(text) > 100 and "not available" not in text,
+              text[:60])
 
-        # the four things that were only wrong on a phone
         page.goto(BASE, wait_until="domcontentloaded")
         page.wait_for_selector("#heroStats:not(:empty)", timeout=40000)
         page.wait_for_selector(".post-title", timeout=20000)
@@ -317,8 +321,6 @@ def main():
         lefts = page.evaluate("()=>[...document.querySelectorAll('.hero-stats .seg')]"
                               ".map(s=>Math.round(s.getBoundingClientRect().left))")
         check("figures start at the left margin", len(lefts) > 1 and lefts[0] == min(lefts), lefts)
-        # the name shares the first row with the nav button rather than sitting
-        # on top of an empty one
         box = page.evaluate("()=>{const b=document.querySelector('.brand').getBoundingClientRect(),"
                             "t=document.querySelector('#topbar').getBoundingClientRect();"
                             "return [Math.round(b.top-t.top),Math.round(t.bottom-b.bottom)];}")
@@ -329,6 +331,103 @@ def main():
         pairs = page.evaluate("()=>[...document.querySelectorAll('#footerLinks .footer-pair')]"
                               ".map(s=>Math.round(s.getBoundingClientRect().top))")
         check("each credit on its own line", len(pairs) == 2 and pairs[0] != pairs[1], pairs)
+
+        print("settings from the database repo")
+        ctx = browser.new_context(viewport={"width": 1400, "height": 900})
+        pg = ctx.new_page()
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        asked = []
+
+        def site_json(route):
+            d = route.fetch().json()
+            d["hero"] = {"title": "Test title {{projects}}",
+                         "text": "Across <b>{{year_range}}</b><img src=x onerror=\"window.__x=1\">",
+                         "placeholder": "Search {{projects}} projects"}
+            d["footer"] = dict(d.get("footer") or {}, note="From {{first_year}} to {{last_year}}. Second line.")
+            d["ai"] = {"default": "t", "instructions": "Test instructions for {{projects}}.",
+                       "providers": [{"id": "t", "label": "Test", "format": "openai",
+                                      "base": "https://ai.example.test/v1", "models": ["m1"]}]}
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(d))
+
+        def posts_json(route):
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({"posts": [
+                {"title": "Post about {{projects}} projects", "author": "t", "date": "2026-01-01",
+                 "abstract": "{{years}} years", "body": "<p>{{projects}} in total</p>"}]}))
+
+        def custom_page(route):
+            route.fulfill(status=200, content_type="text/html",
+                          body="<p>Page with {{projects}} projects from {{year_range}}, plus {{unknown}}.</p>")
+
+        def ai_api(route):
+            cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS"}
+            if route.request.method == "OPTIONS":
+                route.fulfill(status=204, headers=cors)
+                return
+            asked.append((route.request.post_data or "", route.request.headers.get("authorization", "")))
+            route.fulfill(status=200, headers=dict(cors, **{"Content-Type": "text/event-stream"}),
+                          body='data: {"choices":[{"delta":{"content":"Hello "}}]}\n\n'
+                               'data: {"choices":[{"delta":{"content":"there"}}]}\n\ndata: [DONE]\n\n')
+
+        pg.route("**/site.json", site_json)
+        pg.route("**/posts.json", posts_json)
+        pg.route("**/pages/custom.html", custom_page)
+        pg.route("https://ai.example.test/**", ai_api)
+        pg.route(re.compile(r"https://(web\.archive\.org|[0-9]{4}\.igem\.wiki)/.*"),
+                 lambda r: r.fulfill(status=200, content_type="text/html", body="<p>wiki</p>"))
+        pg.goto(BASE, wait_until="domcontentloaded")
+        pg.wait_for_function("()=>document.querySelector('#hero h1').textContent.startsWith('Test title')",
+                             timeout=40000)
+        count = pg.evaluate("()=>state.meta.record_count.toLocaleString('en-US')")
+        check("hero title from site.json", pg.inner_text("#hero h1") == "Test title " + count,
+              pg.inner_text("#hero h1"))
+        check("hero text from site.json", "Across" in pg.inner_text("#hero > p")
+              and "{{" not in pg.inner_text("#hero > p"), pg.inner_text("#hero > p"))
+        check("hero text is sanitized",
+              pg.evaluate("()=>!window.__x && !document.querySelector('#hero > p img[onerror]')"))
+        check("search placeholder from site.json",
+              pg.get_attribute("#q", "placeholder") == "Search %s projects" % count)
+        check("footer note fills in the years", "{{" not in pg.inner_text("#footerNote")
+              and pg.locator("#footerNote .fsent").count() == 2, pg.inner_text("#footerNote"))
+        pg.wait_for_selector(".post-title", timeout=20000)
+        check("post title fills in the count", pg.inner_text(".post-title") == "Post about %s projects" % count,
+              pg.inner_text(".post-title"))
+        pg.locator(".post-card").first.click()
+        pg.wait_for_selector("#blogReader:not([hidden])", timeout=5000)
+        check("post body fills in the count", pg.inner_text(".reader-content").strip() == count + " in total",
+              pg.inner_text(".reader-content"))
+        pg.keyboard.press("Escape")
+        pg.wait_for_selector("#customBtn:not([hidden])", timeout=20000)
+        pg.click("#customBtn")
+        pg.wait_for_function("()=>document.querySelector('#customFrame').srcdoc.includes('Page with')",
+                             timeout=20000)
+        text = pg.frame_locator("#customFrame").locator("body").inner_text(timeout=5000)
+        check("database page fills in the count, keeps unknown names",
+              ("%s projects" % count) in text and "{{unknown}}" in text, text)
+        pg.goto(BASE + "?q=biosensor", wait_until="domcontentloaded")
+        pg.wait_for_function("()=>document.querySelectorAll('.card').length>0", timeout=40000)
+        pg.wait_for_function("()=>state.site && state.site.ai && state.site.ai.default==='t'", timeout=30000)
+        pg.locator(".card").first.click()
+        pg.wait_for_selector(".dh h2", timeout=30000)
+        pg.locator(".dtab").nth(1).click()
+        pg.wait_for_selector(".ai-key", timeout=10000)
+        check("provider list from site.json",
+              pg.evaluate("()=>[...document.querySelectorAll('.ai-prov option')].map(o=>o.value).join(',')")
+              == "t,custom")
+        pg.fill(".ai-key", "test-key")
+        pg.fill(".ai-q", "What chassis?")
+        pg.click(".ai-send")
+        pg.wait_for_function("()=>[...document.querySelectorAll('.ai-msg.ai')].some(m=>m.textContent==='Hello there')",
+                             timeout=30000)
+        check("chat streams an answer", True)
+        body = json.loads(asked[-1][0]) if asked else {}
+        sys_msg = ((body.get("messages") or [{}])[0]).get("content", "")
+        check("chat uses the instructions from site.json",
+              sys_msg.startswith("Test instructions for %s." % count), sys_msg[:80])
+        check("chat sends the question, the model and the key",
+              (body.get("messages") or [{}])[-1].get("content") == "What chassis?" and body.get("model") == "m1"
+              and bool(asked) and asked[-1][1] == "Bearer test-key")
+        ctx.close()
 
         check("no javascript errors in our own code", not errors, errors[:3])
         browser.close()
